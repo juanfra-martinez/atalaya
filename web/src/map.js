@@ -3,7 +3,9 @@
 (() => {
   const A = window.A;
   A.PALETTE = ["#e8b04b", "#5ea3ee", "#ef6a52", "#45c08a", "#a983ea", "#e57db4", "#4fd1d9", "#f08a3c", "#9fc25a", "#d6d0a5", "#7c8cff", "#c97a5a"];
-  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  /* Las variables CSS se leen una vez por dibujo: getComputedStyle por aldea hacía ir a tirones el arrastre. */
+  let cssCache = {};
+  const css = (v) => (cssCache[v] ??= getComputedStyle(document.documentElement).getPropertyValue(v).trim());
 
   class WorldMap {
     constructor(canvas, opts = {}) {
@@ -46,7 +48,7 @@
       const p = this.w.pById.get(v.uid);
       if (v.uid === 1 || v.tid === 5) return css("--t-natars");
       switch (this.mode) {
-        case "tribe": return A.tribeColor(v.tid);
+        case "tribe": return css((A.TRIBES[v.tid] || A.TRIBES[5]).color) || "#888";
         case "inactive": {
           const st = p?.status;
           return st === "inactive" ? css("--bad") : st === "slowing" ? css("--warn") : st === "new" ? css("--info") : st === "active" ? css("--good") : css("--muted");
@@ -61,6 +63,7 @@
     }
     draw() {
       if (!this.w) return;
+      cssCache = {};
       const ctx = this.ctx, W = this.c.clientWidth, H = this.c.clientHeight, s = this.s, R = this.R;
       ctx.fillStyle = css("--surface-2"); ctx.fillRect(0, 0, W, H);
       // borde del mundo y rejilla
@@ -148,7 +151,7 @@
         this.opts.onHover?.(this.w?.vAt.get(wx + "," + wy) || null, wx, wy, e.clientX - r.left, e.clientY - r.top);
       });
       const up = (e) => {
-        this.pointers.delete(e.pointerId); c.classList.remove("drag"); if (this.pointers.size < 2) pinch = null;
+        this.pointers.delete(e.pointerId); c.classList.remove("drag"); if (this.pointers.size < 2) pinch = null; if (this.pointers.size === 1) last = [...this.pointers.values()][0];
         if (!moved && e.type === "pointerup") {
           const r = c.getBoundingClientRect(); const [wx, wy] = this.toWorld(e.clientX - r.left, e.clientY - r.top);
           this.opts.onClick?.(this.w?.vAt.get(wx + "," + wy) || null, wx, wy);

@@ -30,7 +30,7 @@
     for (const e of list) {
       if (!compact && e.day !== day) { day = e.day; out += `<div class="feed-day">${A.esc(A.dayLabel(e.day, { weekday: "long", day: "numeric", month: "long" }))}</div>`; }
       const [ic, cl] = EV_ICON[e.type] || ["events", "player"];
-      out += `<div class="ev"><span class="ev-ico ${cl}">${A.icon(ic)}</span><span class="ev-text">${A.eventText(e)}</span><span class="ev-meta">${e.pop ? A.fmt(e.pop) + " pop" : compact ? A.dayLabel(e.day) : ""}</span></div>`;
+      out += `<div class="ev"><span class="ev-ico ${cl}">${A.icon(ic)}</span><span class="ev-text">${A.eventText(e)}</span><span class="ev-meta">${e.pop ? A.t("common.popN", { n: A.fmt(e.pop) }) : compact ? A.dayLabel(e.day) : ""}</span></div>`;
     }
     return out;
   };
@@ -49,7 +49,7 @@
         </div>
         <div class="map-coords" id="mp-xy">(0|0)</div>
         <div class="map-tip" id="mp-tip"></div>
-        <div class="map-zoom"><button class="icon-btn" id="mp-in" aria-label="zoom +">${A.icon("plus")}</button><button class="icon-btn" id="mp-out" aria-label="zoom −"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg></button><button class="icon-btn" id="mp-fit" aria-label="${A.esc(t("map.fit"))}">${A.icon("expand")}</button>${A.state.home ? `<button class="icon-btn" id="mp-home" aria-label="${A.esc(t("map.home"))}">${A.icon("home")}</button>` : ""}</div>
+        <div class="map-zoom"><button class="icon-btn" id="mp-in" aria-label="${A.esc(t("map.zoomIn"))}">${A.icon("plus")}</button><button class="icon-btn" id="mp-out" aria-label="${A.esc(t("map.zoomOut"))}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg></button><button class="icon-btn" id="mp-fit" aria-label="${A.esc(t("map.fit"))}">${A.icon("expand")}</button>${A.state.home ? `<button class="icon-btn" id="mp-home" aria-label="${A.esc(t("map.home"))}">${A.icon("home")}</button>` : ""}</div>
       </div>`;
     const tip = A.$("#mp-tip", root), xy = A.$("#mp-xy", root);
     const map = new A.WorldMap(A.$("#mp-c", root), {
@@ -59,10 +59,10 @@
         if (!v) { tip.style.display = "none"; return; }
         const p = w.pById.get(v.uid);
         tip.innerHTML = `<b>${A.esc(v.name)}</b> <span class="mono muted">${A.coord(v.x, v.y)}</span><br>${A.ui.tribe(v.tid, false)} ${A.esc(p?.name || "?")} ${p?.tag ? `· <b>${A.esc(p.tag)}</b>` : ""}<br>
-          <span class="muted">${t("common.pop")}</span> ${A.fmt(v.pop)} ${v.d3 != null ? `<span class="${A.cls(v.d3)}">(${A.signed(v.d3)} 3d)</span>` : ""} ${p && p.status !== "active" ? A.ui.pill(p.status) : ""}`;
+          <span class="muted">${t("common.pop")}</span> ${A.fmt(v.pop)} ${v.d3 != null ? `<span class="${A.cls(v.d3)}">(${A.signed(v.d3)} ${t("inact.d3")})</span>` : ""} ${p && p.status !== "active" ? A.ui.pill(p.status) : ""}`;
         tip.style.display = "block";
         const W = root.querySelector(".map-wrap").clientWidth;
-        tip.style.left = Math.min(px + 16, W - 230) + "px"; tip.style.top = py + 16 + "px";
+        tip.style.left = Math.min(px + 16, W - 230) + "px"; tip.style.top = Math.max(8, Math.min(py + 16, root.querySelector(".map-wrap").clientHeight - tip.offsetHeight - 8)) + "px";
       },
       onClick: (v) => v && A.openPlayer(v.uid, v.vid),
     });
@@ -73,8 +73,8 @@
     if (preset?.aid) map.highlight = (v) => w.pById.get(v.uid)?.aid === preset.aid;
     const legend = () => {
       const L = A.$("#mp-leg", root);
-      if (st.mode === "alliance") L.innerHTML = w.alliances.slice(0, A.PALETTE.length).map((a, i) => `<div><i style="background:${A.PALETTE[i]}"></i><span class="tag" data-ally="${a.aid}">${A.esc(a.tag)}</span><span>${A.compact(a.pop)}</span></div>`).join("") + `<div><i style="background:var(--muted)"></i><span>${t("map.otherAlly")}</span></div><div><i style="background:var(--line)"></i><span>${t("map.noAlly")}</span></div>`;
-      else if (st.mode === "tribe") L.innerHTML = [...A.PLAYABLE, 5].map((tid) => `<div><i style="background:var(${A.TRIBES[tid].color})"></i><span>${A.esc(t("tribe." + A.TRIBES[tid].key))}</span><span>${w.players.filter((p) => p.tid === tid).length}</span></div>`).join("");
+      if (st.mode === "alliance") L.innerHTML = w.alliances.slice(0, A.PALETTE.length).map((a, i) => `<div><i style="background:${A.PALETTE[i]}"></i>${A.ui.ally(a.aid)}<span>${A.compact(a.pop)}</span></div>`).join("") + `<div><i style="background:var(--muted)"></i><span>${t("map.otherAlly")}</span></div><div><i style="background:var(--line)"></i><span>${t("map.noAlly")}</span></div>`;
+      else if (st.mode === "tribe") L.innerHTML = [...A.worldTribes(), 5].map((tid) => `<div><i style="background:var(${A.TRIBES[tid].color})"></i><span>${A.esc(t("tribe." + A.TRIBES[tid].key))}</span><span>${w.players.filter((p) => p.tid === tid).length}</span></div>`).join("");
       else if (st.mode === "inactive") L.innerHTML = ["active", "slowing", "inactive", "new", "unknown"].filter((s) => s !== "unknown" || w.counts.unknown).map((s) => `<div><i style="background:var(${{ active: "--good", slowing: "--warn", inactive: "--bad", new: "--info", unknown: "--muted" }[s]})"></i><span>${t("status." + s)}</span><span>${w.counts[s]}</span></div>`).join("");
       else L.innerHTML = `<div><i style="background:hsl(42,55%,30%)"></i><span>${t("map.small")}</span></div><div><i style="background:hsl(4,85%,62%)"></i><span>${t("map.big")}</span></div>`;
     };
@@ -83,7 +83,7 @@
     A.$("#mp-q", root).oninput = A.debounce((e) => {
       const q = e.target.value.trim().toLowerCase();
       const c = A.parseCoord(q);
-      if (!q) { map.highlight = preset?.targets ? (v) => preset.targets.has(v.vid) : null; map.focus = null; map.draw(); return; }
+      if (!q) { map.highlight = preset?.targets ? (v) => preset.targets.has(v.vid) : preset?.aid ? (v) => w.pById.get(v.uid)?.aid === preset.aid : null; map.focus = null; map.draw(); return; }
       if (c) { map.focus = c; map.highlight = null; map.centerOn(c.x, c.y, Math.max(map.s, 8)); return; }
       const a = w.alliances.find((a) => a.tag.toLowerCase() === q);
       map.highlight = a ? (v) => w.pById.get(v.uid)?.aid === a.aid : (v) => (w.pById.get(v.uid)?.name || "").toLowerCase().includes(q) || v.name.toLowerCase().includes(q);
@@ -105,7 +105,7 @@
       `<div class="card"><div class="card-h"><h2>${t("ev.perDay")}</h2><span class="sub">${t("ev.perDaySub")}</span></div><div class="card-b"><div id="ev-chart"></div></div></div>
        <div class="card"><div class="card-h"><h2>${t("war.title")}</h2><span class="sub">${t("war.sub")}</span></div><div class="table-wrap card-b" id="ev-war"></div></div>
        <div class="card"><div class="card-h"><div class="filters-inline" id="ev-g">${Object.keys(A.EV_GROUPS).map((g) => `<button aria-pressed="${st.g.has(g)}" data-g="${g}">${t("ev.g." + g)}</button>`).join("")}</div>
-         <span class="right"><input class="input" id="ev-q" placeholder="${A.esc(t("ev.search"))}" style="width:240px"></span></div>
+         <span class="right"><input class="input" id="ev-q" placeholder="${A.esc(t("ev.search"))}" aria-label="${A.esc(t("ev.search"))}" style="width:240px"></span></div>
          <div class="feed" id="ev-feed" style="margin-top:6px"></div><div class="row" style="justify-content:center;padding:12px" id="ev-more"></div></div>`;
     const colors = { conquered: "var(--bad)", destroyed: "var(--muted)", founded: "var(--good)", alliance: "var(--info)" };
     requestAnimationFrame(() => A.barChart(A.$("#ev-chart", root), {
@@ -136,8 +136,8 @@
     const st = { tab: "players", q: "", sort: "pop", dir: -1, limit: 100, tribe: 0 };
     root.innerHTML = A.head(t("rk.title"), t("rk.sub")) +
       `<div class="card"><div class="card-h"><div class="seg" id="rk-tab"><button aria-pressed="true" data-v="players">${t("common.players")}</button><button aria-pressed="false" data-v="alliances">${t("common.alliances")}</button><button aria-pressed="false" data-v="tribes">${t("common.tribes")}</button></div>
-        <select class="input" id="rk-tribe" style="width:auto">${[0, ...A.PLAYABLE].map((tid) => `<option value="${tid}">${tid ? A.esc(t("tribe." + A.TRIBES[tid].key)) : t("common.allTribes")}</option>`).join("")}</select>
-        <span class="right"><input class="input" id="rk-q" placeholder="${A.esc(t("rk.search"))}" style="width:240px"></span></div>
+        <select class="input" id="rk-tribe" style="width:auto" aria-label="${A.esc(t("common.tribe"))}">${[0, ...A.worldTribes()].map((tid) => `<option value="${tid}">${tid ? A.esc(t("tribe." + A.TRIBES[tid].key)) : t("common.allTribes")}</option>`).join("")}</select>
+        <span class="right"><input class="input" id="rk-q" placeholder="${A.esc(t("rk.search"))}" aria-label="${A.esc(t("rk.search"))}" style="width:240px"></span></div>
         <div class="table-wrap card-b" style="max-height:calc(100vh - 250px);overflow:auto"><table class="t" id="rk-t"><thead></thead><tbody></tbody></table></div>
         <div class="row" style="justify-content:center;padding:0 0 14px" id="rk-more"></div></div>`;
     const table = A.$("#rk-t", root);
@@ -154,17 +154,17 @@
         table.querySelector("tbody").innerHTML = rows.map((r) => `<tr><td>${A.ui.tribe(r.tid)}</td><td class="r">${A.fmt(r.players)}</td><td class="r">${A.fmt(r.share, 1)} %</td><td class="r">${A.fmt(r.villages)}</td><td class="r">${A.fmt(r.pop)}</td><td class="r">${A.fmt(r.avgPop)}</td><td class="r">${A.fmt(r.avgVillages, 1)}</td><td class="r">${A.ui.delta(r.d7)}</td></tr>`).join("");
       } else if (st.tab === "players") {
         rows = w.players.filter((p) => p.status !== "natar" && (!st.tribe || p.tid === st.tribe) && (!st.q || p.name.toLowerCase().includes(st.q) || (p.tag || "").toLowerCase().includes(st.q)));
-        cols = [{ k: "rank", label: "#", sort: (p) => -p.pop }, { k: "name", label: t("common.player"), sort: (p) => p.name.toLowerCase() }, { k: "ally", label: t("common.alliance"), sort: (p) => p.tag }, { k: "tribe", label: t("common.tribe"), sort: (p) => p.tid },
+        cols = [{ k: "rank", label: "#", sort: (p) => -p.rank }, { k: "name", label: t("common.player"), sort: (p) => p.name.toLowerCase() }, { k: "ally", label: t("common.alliance"), sort: (p) => p.tag }, { k: "tribe", label: t("common.tribe"), sort: (p) => p.tid },
           { k: "villages", label: t("common.villagesShort"), cls: "r", sort: (p) => p.villages }, { k: "pop", label: t("common.pop"), cls: "r", sort: (p) => p.pop }, { k: "d1", label: t("rk.d1"), cls: "r", sort: (p) => p.d1 ?? -1e9 }, { k: "d7", label: t("dash.d7"), cls: "r", sort: (p) => p.d7 ?? -1e9 },
           { k: "status", label: t("common.status"), sort: (p) => p.confidence }, { k: "hist", label: t("rk.trend") }, { k: "w", label: "" }];
         A.ui.sortable(table, rows, cols, st, render);
-        table.querySelector("tbody").innerHTML = rows.slice(0, st.limit).map((p) => `<tr><td class="rank">${p.rank}</td><td>${A.ui.player(p)}</td><td>${A.ui.ally(p.aid)}</td><td>${A.ui.tribe(p.tid)}</td><td class="r">${p.villages}</td><td class="r">${A.fmt(p.pop)}</td><td class="r">${A.ui.delta(p.d1)}</td><td class="r">${A.ui.delta(p.d7)}</td><td>${A.ui.pill(p.status)}</td><td>${A.spark(p.popHist, { w: 90, h: 22 })}</td><td>${A.ui.star("player", p.uid)}</td></tr>`).join("");
+        table.querySelector("tbody").innerHTML = rows.slice(0, st.limit).map((p) => `<tr><td class="rank">${p.rank}</td><td>${A.ui.player(p)}</td><td>${A.ui.ally(p.aid)}</td><td>${A.ui.tribe(p.tid)}</td><td class="r">${A.fmt(p.villages)}</td><td class="r">${A.fmt(p.pop)}</td><td class="r">${A.ui.delta(p.d1)}</td><td class="r">${A.ui.delta(p.d7)}</td><td>${A.ui.pill(p.status)}</td><td>${A.spark(p.popHist, { w: 90, h: 22 })}</td><td>${A.ui.star("player", p.uid)}</td></tr>`).join("");
       } else {
         rows = w.alliances.filter((a) => !st.q || a.tag.toLowerCase().includes(st.q));
-        cols = [{ k: "rank", label: "#", sort: (a) => -a.pop }, { k: "tag", label: t("common.alliance"), sort: (a) => a.tag.toLowerCase() }, { k: "members", label: t("common.members"), cls: "r", sort: (a) => a.members }, { k: "villages", label: t("common.villagesShort"), cls: "r", sort: (a) => a.villages },
+        cols = [{ k: "rank", label: "#", sort: (a) => -a.rank }, { k: "tag", label: t("common.alliance"), sort: (a) => a.tag.toLowerCase() }, { k: "members", label: t("common.members"), cls: "r", sort: (a) => a.members }, { k: "villages", label: t("common.villagesShort"), cls: "r", sort: (a) => a.villages },
           { k: "pop", label: t("common.pop"), cls: "r", sort: (a) => a.pop }, { k: "avg", label: t("rk.avg"), cls: "r", sort: (a) => a.pop / a.members }, { k: "d1", label: t("rk.d1"), cls: "r", sort: (a) => a.d1 ?? -1e9 }, { k: "d7", label: t("dash.d7"), cls: "r", sort: (a) => a.d7 ?? -1e9 }, { k: "hist", label: t("rk.trend") }, { k: "w", label: "" }];
         A.ui.sortable(table, rows, cols, st, render);
-        table.querySelector("tbody").innerHTML = rows.slice(0, st.limit).map((a) => `<tr><td class="rank">${a.rank}</td><td>${A.ui.ally(a.aid)}</td><td class="r">${a.members}</td><td class="r">${a.villages}</td><td class="r">${A.fmt(a.pop)}</td><td class="r">${A.fmt(a.pop / a.members)}</td><td class="r">${A.ui.delta(a.d1)}</td><td class="r">${A.ui.delta(a.d7)}</td><td>${A.spark(a.popHist, { w: 90, h: 22, color: "var(--info)" })}</td><td>${A.ui.star("alliance", a.aid)}</td></tr>`).join("");
+        table.querySelector("tbody").innerHTML = rows.slice(0, st.limit).map((a) => `<tr><td class="rank">${a.rank}</td><td>${A.ui.ally(a.aid)}</td><td class="r">${A.fmt(a.members)}</td><td class="r">${A.fmt(a.villages)}</td><td class="r">${A.fmt(a.pop)}</td><td class="r">${A.fmt(a.pop / a.members)}</td><td class="r">${A.ui.delta(a.d1)}</td><td class="r">${A.ui.delta(a.d7)}</td><td>${A.spark(a.popHist, { w: 90, h: 22, color: "var(--info)" })}</td><td>${A.ui.star("alliance", a.aid)}</td></tr>`).join("");
       }
       if (!rows.length) table.querySelector("tbody").innerHTML = `<tr><td colspan="11">${A.ui.empty(t("common.noResults"))}</td></tr>`;
       A.$("#rk-more", root).innerHTML = rows.length > st.limit ? `<button class="btn" id="rk-mb">${t("common.showMore", { n: rows.length - st.limit })}</button>` : "";
@@ -179,7 +179,7 @@
   /* ================= HERRAMIENTAS ================= */
   A.views.tools = (root) => {
     const w = A.state.world, h = A.state.home || { x: 0, y: 0, tid: 1 };
-    const st = { from: `${h.x}|${h.y}`, to: "", tid: h.tid || 1, ts: A.filters().ts || 0, art: 1, speed: A.troopSpeed(w.server.speed), mode: "send", at: "" };
+    const st = { from: `${h.x}|${h.y}`, to: "", tid: A.UNITS[h.tid] ? h.tid : 1, ts: A.filters().ts || 0, art: 1, speed: A.troopSpeed(w.server.speed), mode: "send", at: "" };
     const now = new Date(); now.setMinutes(now.getMinutes() + 90, 0, 0);
     const pad = (n) => String(n).padStart(2, "0");
     st.at = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -196,7 +196,7 @@
             <div class="fgrid cols-4">
               <div class="field"><label for="tl-tid">${t("common.tribe")}</label><select class="input" id="tl-tid">${A.PLAYABLE.map((tid) => `<option value="${tid}" ${tid === st.tid ? "selected" : ""}>${A.esc(t("tribe." + A.TRIBES[tid].key))}</option>`).join("")}</select></div>
               <div class="field"><label for="tl-ts">${t("inact.ts")}</label><input class="input num" type="number" min="0" max="20" id="tl-ts" value="${st.ts}"></div>
-              <div class="field"><label for="tl-art">${t("inact.art")}</label><select class="input" id="tl-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}">×${x}</option>`).join("")}</select></div>
+              <div class="field"><label for="tl-art">${t("inact.art")}</label><select class="input" id="tl-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}">×${A.fmt(x, x % 1 ? 1 : 0)}</option>`).join("")}</select></div>
               <div class="field"><label for="tl-speed">${t("tools.speed")}</label><input class="input num" type="number" min="1" max="10" id="tl-speed" value="${st.speed}"></div>
             </div>
             <div class="tool-mode">
@@ -209,7 +209,7 @@
         <section class="card tool wide" id="tool-army"></section>
         <section class="card tool wide" id="tool-culture"></section>
         <section class="card tool wide" id="tool-notes"><div class="card-h"><h2>${t("tools.notes")}</h2></div><div class="card-b notes-grid">
-          <div class="explain">${t("tools.noteTs")}</div><div class="explain">${t("tools.noteTorus", { size: 2 * w.R + 1 })}</div><div class="explain">${t("tools.noteSpeed")}</div>
+          <div class="explain">${t("tools.noteTs")}</div><div class="explain">${t(w.wrap ? "tools.noteTorus" : "tools.noteFlat", { size: 2 * w.R + 1 })}</div><div class="explain">${t("tools.noteSpeed")}</div>
           <div class="explain">${t("inc.noteHow")}</div><div class="explain">${t("inc.noteTime")}</div><div class="explain">${t("inc.noteFake")}</div></div></section>
       </div>`;
     A.mountIncoming(A.$("#tool-incoming", root));
@@ -236,6 +236,7 @@
       const d = A.dist(a.x, a.y, b.x, b.y, w.R);
       A.$("#tl-dist", root).textContent = `${A.coord(a.x, a.y)} → ${A.coord(b.x, b.y)} · ${A.fmt(d, 2)} ${t("common.fields")}`;
       const land = st.mode === "land" ? new Date(A.$("#tl-at", root).value) : null;
+      if (land && isNaN(land)) { box.innerHTML = `<div class="muted">${t("tools.enterTime")}</div>`; return; }
       box.innerHTML = A.UNITS[st.tid].map((u, i) => {
         const sec = A.travel(d, u[2], { serverSpeed: st.speed, ts: st.ts, artifact: st.art });
         const when = land ? new Date(land - sec * 1000) : new Date(Date.now() + sec * 1000);
@@ -278,7 +279,7 @@
       <div class="card"><div class="card-h"><h2>${t("watch.activity")}</h2><span class="sub">${t("watch.activitySub")}</span></div><div class="feed" style="margin-top:6px">${A.eventRows(rel.slice(0, 80))}</div></div>`;
     root.onclick = (e) => {
       const d = e.target.closest("[data-del-rule]");
-      if (d) { const r = A.store.get("rules:" + A.state.sid, []); const [gone] = r.splice(+d.dataset.delRule, 1); A.store.set("rules:" + A.state.sid, r); if (!A.LOCAL && gone?.id) A.api.send("DELETE", `/alerts/${gone.id}`).catch(() => {}); A.route(); }
+      if (d) { const r = A.store.get("rules:" + A.state.sid, []); const [gone] = r.splice(+d.dataset.delRule, 1); A.store.set("rules:" + A.state.sid, r); if (!A.LOCAL && gone?.id) A.api.send("DELETE", `/alerts/${gone.id}`).catch((err) => A.toast(`${t("alert.delErr")} (${err.message})`)); A.route(); }
       const un = e.target.closest("[data-unwatch]");
       if (un) { const [type, id] = un.dataset.unwatch.split(":"); A.toggleWatch(type, isNaN(+id) ? id : +id); A.route(); }
     };
@@ -294,12 +295,12 @@
   const watchRow = (w, it) => {
     if (it.type === "player") {
       const p = w.pById.get(it.id);
-      if (!p) return `<div class="watch-item"><span class="muted">#${it.id} · ${t("watch.goneP")}</span><span></span><button class="btn ghost sm" data-unwatch="player:${it.id}">${A.icon("x")}</button></div>`;
-      return `<div class="watch-item"><div style="min-width:0">${A.ui.tribe(p.tid, false)} ${A.ui.player(p)} <span class="muted">${p.tag ? "· " + A.esc(p.tag) : ""}</span><div class="muted" style="font-size:12px">${A.fmt(p.pop)} pop · ${p.villages} ${t("common.villagesShort").toLowerCase()} · 7d ${A.signed(p.d7)}</div></div><span>${A.ui.pill(p.status)}</span><button class="btn ghost sm" data-unwatch="player:${p.uid}" aria-label="${A.esc(t("common.delete"))}">${A.icon("x")}</button></div>`;
+      if (!p) return `<div class="watch-item"><span class="muted">#${it.id} · ${t("watch.goneP")}</span><span></span><button class="btn ghost sm" data-unwatch="player:${it.id}" aria-label="${A.esc(t("common.unwatch"))}">${A.icon("x")}</button></div>`;
+      return `<div class="watch-item"><div style="min-width:0">${A.ui.tribe(p.tid, false)} ${A.ui.player(p)} <span class="muted">${p.tag ? "· " + A.esc(p.tag) : ""}</span><div class="muted" style="font-size:12px">${t("common.popN", { n: A.fmt(p.pop) })} · ${p.villages} ${t("common.villagesShort").toLowerCase()} · ${t("dash.d7")} ${A.signed(p.d7)}</div></div><span>${A.ui.pill(p.status)}</span><button class="btn ghost sm" data-unwatch="player:${p.uid}" aria-label="${A.esc(t("common.unwatch"))}">${A.icon("x")}</button></div>`;
     }
     const a = w.aById.get(it.id);
-    if (!a) return "";
-    return `<div class="watch-item"><div>${A.icon("shield").replace("<svg", '<svg width="14" height="14"')} ${A.ui.ally(a.aid)}<div class="muted" style="font-size:12px">${a.members} ${t("common.members").toLowerCase()} · ${A.fmt(a.pop)} pop · 7d ${A.signed(a.d7)}</div></div><span>${A.spark(a.popHist, { w: 70, h: 20, color: "var(--info)" })}</span><button class="btn ghost sm" data-unwatch="alliance:${a.aid}">${A.icon("x")}</button></div>`;
+    if (!a) return `<div class="watch-item"><span class="muted">#${it.id} · ${t("watch.goneA")}</span><span></span><button class="btn ghost sm" data-unwatch="alliance:${it.id}" aria-label="${A.esc(t("common.unwatch"))}">${A.icon("x")}</button></div>`;
+    return `<div class="watch-item"><div>${A.icon("shield").replace("<svg", '<svg width="14" height="14"')} ${A.ui.ally(a.aid)}<div class="muted" style="font-size:12px">${a.members} ${t("common.members").toLowerCase()} · ${t("common.popN", { n: A.fmt(a.pop) })} · ${t("dash.d7")} ${A.signed(a.d7)}</div></div><span>${A.spark(a.popHist, { w: 70, h: 20, color: "var(--info)" })}</span><button class="btn ghost sm" data-unwatch="alliance:${a.aid}" aria-label="${A.esc(t("common.unwatch"))}">${A.icon("x")}</button></div>`;
   };
 
   A.alertModal = (preset = {}) => {

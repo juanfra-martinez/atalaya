@@ -6,7 +6,9 @@ const A = (window.A = window.A || {});
 A.$ = (s, r = document) => r.querySelector(s);
 A.$$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 A.esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-A.fmt = (n, d = 0) => (n == null || isNaN(n) ? "—" : Number(n).toLocaleString(A.locale(), { maximumFractionDigits: d, minimumFractionDigits: d }));
+/* Separador de miles siempre: en español la norma deja sin agrupar los números de cuatro cifras ("9304" junto a "10.077"),
+   y en tablas y tarjetas esa mezcla parece un error. */
+A.fmt = (n, d = 0) => (n == null || isNaN(n) ? "—" : Number(n).toLocaleString(A.locale(), { maximumFractionDigits: d, minimumFractionDigits: d, useGrouping: "always" }));
 A.compact = (n) => (n == null ? "—" : Math.abs(n) >= 10000 ? Number(n).toLocaleString(A.locale(), { notation: "compact", maximumFractionDigits: 1 }) : A.fmt(n));
 A.signed = (n) => (n == null ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "±") + A.fmt(Math.abs(n)));
 A.cls = (n) => (n == null ? "flat" : n > 0 ? "up" : n < 0 ? "down" : "flat");
@@ -41,6 +43,8 @@ A.ago = (ts, now = Date.now()) => {
 A.dayLabel = (iso, opts = { day: "numeric", month: "short" }) => new Date(iso + "T12:00:00Z").toLocaleDateString(A.locale(), opts);
 
 /* ---------- tribus y unidades: [nombre ES, nombre EN, velocidad (casillas/hora a ×1), capacidad de carga] ----------
+   Nombres: los mismos que usa el juego, copiados de sus traducciones (/js/es-ES/truppen.json y /js/en-US/truppen.json,
+   claves tid1…tid90, International 7, versión 718.7, 27 nov 2026). Los informes de batalla en español lo confirman.
    Romanos, germanos y galos: velocidad y carga comprobadas en el manual del juego (/api/v1/manual/troop/N).
    Egipcios y hunos: comprobados también en el manual. Espartanos y vikingos: tablas públicas de la comunidad (Kirilloid). */
 A.TRIBES = {
@@ -49,14 +53,16 @@ A.TRIBES = {
   7: { key: "huns", color: "--t-huns" }, 8: { key: "spartans", color: "--t-spartans" }, 9: { key: "vikings", color: "--t-vikings" },
 };
 A.PLAYABLE = [1, 2, 3, 6, 7, 8, 9];
+/* Tribus del mundo abierto, según su /api/v1/info; si no se conocen, todas las jugables. */
+A.worldTribes = () => { const ts = (A.state?.world?.server.info?.tribes || []).filter((tid) => A.PLAYABLE.includes(tid)); return ts.length ? ts : A.PLAYABLE; };
 A.UNITS = {
-  1: [["Legionario", "Legionnaire", 6, 50], ["Pretoriano", "Praetorian", 5, 20], ["Imperano", "Imperian", 7, 50], ["Equites Legati", "Equites Legati", 16, 0], ["Equites Imperatoris", "Equites Imperatoris", 14, 100], ["Equites Caesaris", "Equites Caesaris", 10, 70], ["Carnero", "Battering ram", 4, 0], ["Catapulta de fuego", "Fire catapult", 3, 0], ["Senador", "Senator", 4, 0], ["Colono", "Settler", 5, 3000]],
-  2: [["Luchador de porra", "Clubswinger", 7, 60], ["Lancero", "Spearman", 7, 40], ["Luchador de hacha", "Axeman", 6, 50], ["Emisario", "Scout", 9, 0], ["Paladín", "Paladin", 10, 110], ["Caballero teutón", "Teutonic knight", 9, 80], ["Ariete", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Cabecilla", "Chief", 4, 0], ["Colono", "Settler", 5, 3000]],
-  3: [["Falange", "Phalanx", 7, 35], ["Luchador de espada", "Swordsman", 6, 45], ["Batidor", "Pathfinder", 17, 0], ["Rayo de Teutates", "Theutates thunder", 19, 75], ["Jinete druida", "Druidrider", 16, 35], ["Jinete eduo", "Haeduan", 13, 65], ["Carnero", "Ram", 4, 0], ["Trebuchet", "Trebuchet", 3, 0], ["Cacique", "Chieftain", 5, 0], ["Colono", "Settler", 5, 3000]],
-  6: [["Milicia de esclavos", "Slave militia", 7, 15], ["Guardián de ceniza", "Ash warden", 6, 50], ["Guerrero khopesh", "Khopesh warrior", 7, 45], ["Explorador sopdu", "Sopdu explorer", 16, 0], ["Guardia de Anhur", "Anhur guard", 15, 50], ["Carro de Resheph", "Resheph chariot", 10, 70], ["Ariete", "Ram", 4, 0], ["Catapulta de piedra", "Stone catapult", 3, 0], ["Nomarca", "Nomarch", 4, 0], ["Colono", "Settler", 5, 3000]],
-  7: [["Mercenario", "Mercenary", 6, 50], ["Arquero", "Bowman", 6, 30], ["Observador", "Spotter", 19, 0], ["Jinete estepario", "Steppe rider", 16, 75], ["Tirador", "Marksman", 15, 105], ["Merodeador", "Marauder", 14, 80], ["Ariete", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Logades", "Logades", 5, 0], ["Colono", "Settler", 5, 3000]],
-  8: [["Hoplita", "Hoplite", 6, 60], ["Centinela", "Sentinel", 9, 0], ["Escudero", "Shieldsman", 8, 40], ["Therion de doble acero", "Twinsteel therion", 6, 50], ["Jinete de Elpida", "Elpida rider", 16, 110], ["Aplastador corintio", "Corinthian crusher", 9, 80], ["Ariete", "Ram", 4, 0], ["Balista", "Ballista", 3, 0], ["Éforo", "Ephor", 4, 0], ["Colono", "Settler", 5, 3000]],
-  9: [["Siervo", "Thrall", 7, 55], ["Escudera", "Shield maiden", 7, 40], ["Berserker", "Berserker", 5, 75], ["Ojo de Heimdall", "Heimdall's eye", 9, 0], ["Jinete huscarle", "Huskarl rider", 12, 110], ["Bendición de la valquiria", "Valkyrie's blessing", 9, 80], ["Ariete", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Jarl", "Jarl", 5, 0], ["Colono", "Settler", 5, 3000]],
+  1: [["Legionario", "Legionnaire", 6, 50], ["Pretoriano", "Praetorian", 5, 20], ["Imperano", "Imperian", 7, 50], ["Equites Legati", "Equites Legati", 16, 0], ["Equites Imperatoris", "Equites Imperatoris", 14, 100], ["Equites Caesaris", "Equites Caesaris", 10, 70], ["Ariete", "Battering ram", 4, 0], ["Catapulta de fuego", "Fire Catapult", 3, 0], ["Senador", "Senator", 4, 0], ["Colono", "Settler", 5, 3000]],
+  2: [["Luchador de porra", "Clubswinger", 7, 60], ["Lancero", "Spearman", 7, 40], ["Luchador de Hacha", "Axeman", 6, 50], ["Emisario", "Scout", 9, 0], ["Paladín", "Paladin", 10, 110], ["Jinete Teutón", "Teutonic Knight", 9, 80], ["Ariete de madera", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Cabecilla", "Chief", 4, 0], ["Colono", "Settler", 5, 3000]],
+  3: [["Falange", "Phalanx", 7, 35], ["Espadachín", "Swordsman", 6, 45], ["Batidor", "Pathfinder", 17, 0], ["Rayo de Teutates", "Theutates Thunder", 19, 75], ["Jinete Druida", "Druidrider", 16, 35], ["Jinete Eduo", "Haeduan", 13, 65], ["Ariete de madera", "Ram", 4, 0], ["Catapulta de guerra", "Trebuchet", 3, 0], ["Cacique", "Chieftain", 5, 0], ["Colono", "Settler", 5, 3000]],
+  6: [["Infante esclavo", "Slave Militia", 7, 15], ["Guardia Ash", "Ash Warden", 6, 50], ["Guerreros de Khopes", "Khopesh Warrior", 7, 45], ["Explorador Sopdu", "Sopdu Explorer", 16, 0], ["Guarda Osiris", "Anhur Guard", 15, 50], ["Carro de Reshef", "Resheph Chariot", 10, 70], ["Ariete", "Ram", 4, 0], ["Catapulta de piedra", "Stone Catapult", 3, 0], ["Visir", "Nomarch", 4, 0], ["Colono", "Settler", 5, 3000]],
+  7: [["Mercenario", "Mercenary", 6, 50], ["Arquero", "Bowman", 6, 30], ["Observador", "Spotter", 19, 0], ["Jinete estepario", "Steppe Rider", 16, 75], ["Jinete certero", "Marksman", 15, 105], ["Merodeador", "Marauder", 14, 80], ["Ariete", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Logades", "Logades", 5, 0], ["Colono", "Settler", 5, 3000]],
+  8: [["Hoplita", "Hoplite", 6, 60], ["Centinela", "Sentinel", 9, 0], ["Escudero", "Shieldsman", 8, 40], ["Terión de doble hoja", "Twinsteel Therion", 6, 50], ["Jinete elpida", "Elpida Rider", 16, 110], ["Hippei corintio", "Corinthian Crusher", 9, 80], ["Ariete", "Ram", 4, 0], ["Ballesta", "Ballista", 3, 0], ["Éforo", "Ephor", 4, 0], ["Colono", "Settler", 5, 3000]],
+  9: [["Esclavo", "Thrall", 7, 55], ["Escudera", "Shield Maiden", 7, 40], ["Berserker", "Berserker", 5, 75], ["Ojo de Heimdall", "Heimdall's Eye", 9, 0], ["Jinete huscarle", "Huskarl Rider", 12, 110], ["Bendición de valquiria", "Valkyrie's Blessing", 9, 80], ["Ariete", "Ram", 4, 0], ["Catapulta", "Catapult", 3, 0], ["Jarl", "Jarl", 5, 0], ["Colono", "Settler", 5, 3000]],
 };
 /* Cereal por hora de las seis primeras unidades de cada tribu, según la tabla oficial de soporte de Travian (artículo 187).
    La caballería romana va sin abrevadero: esa tabla lo incluye a nivel 20 y resta 1 por unidad. */

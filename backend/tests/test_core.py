@@ -114,6 +114,25 @@ def test_alerts_area_conquest(con):
     assert sent[0]["embeds"][0]["footer"]["text"] == s
 
 
+
+def test_alerts_bad_rule_does_not_block_others(con):
+    s = "ts1.x1.test.travian.com"
+    ingest_snapshot(con, s, "2026-10-01", [_row(1, 0, 0, 10, 1, 100), _row(2, 5, 5, 20, 2, 80)])
+    hook = "https://discord.com/api/webhooks/1/x"
+    con.execute("INSERT INTO alert_rules(server_id, kind, params, webhook_url) VALUES (?,?,?,?)", (s, "player_inactive", "{}", hook))
+    con.execute("INSERT INTO alert_rules(server_id, kind, params, webhook_url) VALUES (?,?,?,?)",
+                (s, "area_conquest", json.dumps({"x": 0, "y": 0, "radius": 10}), hook))
+    ingest_snapshot(con, s, "2026-10-02", [_row(1, 0, 0, 10, 1, 100), _row(2, 5, 5, 10, 1, 80)])
+    fired = alerts.evaluate(con, s, "2026-10-02", sender=lambda url, payload: True)
+    assert [f["kind"] for f in fired] == ["area_conquest"]
+
+
+def test_webhook_re():
+    ok = ["https://discord.com/api/webhooks/1/abc-_", "https://ptb.discord.com/api/webhooks/1/x", "https://canary.discordapp.com/api/webhooks/2/y"]
+    bad = ["https://discord.com/api/webhooks/1/x\n", "https://evil.com/api/webhooks/1/x", "http://discord.com/api/webhooks/1/x"]
+    assert all(alerts.WEBHOOK_RE.fullmatch(u) for u in ok)
+    assert not any(alerts.WEBHOOK_RE.fullmatch(u) for u in bad)
+
 def test_discovery_parsers():
     html = ('<html><script id="__GW_DATA__" type="application/json">{"items":{"a":{"id":1,"name":"Europe 3",'
             '"state":1,"url":"https://ts3.x2.europe.travian.com/"},"b":{"id":2,"name":"x","url":"https://evil.com"}}}'

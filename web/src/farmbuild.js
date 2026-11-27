@@ -194,8 +194,8 @@
           <button data-fb="m:paste" aria-pressed="${st.method === "paste"}">${A.icon("copy")}${t("fb.mPaste")}</button></div>` : "";
       /* Hasta la primera acción, el botón principal empieza (abre o copia el actual) en vez de marcarlo. */
       const go = !cur ? "" : st.started
-        ? `<button class="btn primary fb-go" data-fb="a">${A.icon("farm")}${t("fb.added")}<kbd>Enter</kbd></button>`
-        : `<button class="btn primary fb-go" data-fb="again">${A.icon(st.method === "open" ? "external" : "copy")}${t(st.method === "open" ? "fb.startOpen" : "fb.startPaste", { c: `${cur.x}|${cur.y}` })}<kbd>Enter</kbd></button>`;
+        ? `<button class="btn primary fb-go" data-fb="a">${A.icon("farm")}${t("fb.added")}<kbd>${t("key.enter")}</kbd></button>`
+        : `<button class="btn primary fb-go" data-fb="again">${A.icon(st.method === "open" ? "external" : "copy")}${t(st.method === "open" ? "fb.startOpen" : "fb.startPaste", { c: `${cur.x}|${cur.y}` })}<kbd>${t("key.enter")}</kbd></button>`;
       const curCard = cur ? `<div class="fb-cur">
           <div class="fb-k"><span>${t("fb.target", { i: q.i + 1, n })}</span>${q.st[A.fbKey(cur)] ? `<span class="chip">${t("fb.st." + q.st[A.fbKey(cur)])}</span>` : ""}</div>
           <button class="fb-coord" data-fb="again" title="${A.esc(t(st.method === "open" ? "fb.again.open" : "fb.again.paste"))}">(${cur.x}|${cur.y})</button>
@@ -219,7 +219,7 @@
           <i class="fb-ic" aria-hidden="true">${v === "a" ? "✓" : v === "s" ? "↷" : v === "x" ? "✕" : i + 1}</i><b class="mono">${it.x}|${it.y}</b><span class="fb-qn">${A.esc(it.name)}</span><span class="muted mono">${A.fmt(it.pop)} · ${A.fmt(it.dist, 1)}</span></button></li>`;
       }).join("")}</ol>`;
       return `<div class="fb ${compact ? "fb-compact" : ""}">
-        <div class="fb-prog"><div class="fb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${(done / n) * 100}%"></i></div>
+        <div class="fb-prog"><div class="fb-bar" role="progressbar" aria-label="${A.esc(t("fb.progress", { d: done, n }))}" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${(done / n) * 100}%"></i></div>
           <div class="fb-counts"><b>${t("fb.progress", { d: done, n })}</b><span class="muted">${t("fb.counts", { a: s.a, s: s.s, x: s.x })}</span></div></div>
         ${methodSeg}
         <details class="fb-help" ${st.help && !compact ? "open" : ""}><summary>${t("fb.how")}</summary><ol class="steps">${steps}</ol>
@@ -250,7 +250,7 @@
       const tg = e.target, tag = tg?.tagName || "";
       if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
       const k = e.key.toLowerCase();
-      if ((k === "enter" || k === " ") && /BUTTON|A|SUMMARY/.test(tag)) return; // el propio botón ya hace clic
+      if ((k === "enter" || k === " ") && /^(BUTTON|A|SUMMARY)$/.test(tag)) return; // el propio botón ya hace clic
       const map = { enter: "a", " ": "a", s: "s", d: "x", c: "again", o: "again", backspace: "back", arrowleft: "back" };
       if (!map[k]) return;
       if (!q.items[q.i] && map[k] !== "back") return;
