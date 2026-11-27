@@ -1,0 +1,153 @@
+# Atalaya sin servidor: cada hora descarga los map.sql nuevos y publica la web en GitHub Pages.
+#
+# La base SQLite (podada) se guarda entre pasadas como fichero de la release "state".
+# Solo se guarda y se despliega cuando algo ha cambiado (o al subir código / lanzarlo a mano).
+name: Recolectar y publicar
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # cada hora; los mundos regeneran su map.sql una vez al día a horas distintas
+  workflow_dispatch:
+    inputs:
+      fresh:
+        description: "Empezar con la base vacía si no hay ninguna guardada"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["backend/**", "web/**", ".github/workflows/collect.yml"]
+
+permissions:
+  contents: write   # release "state" y commit de mantenimiento
+  pages: write
+  id-token: write
+
+concurrency:
+  group: atalaya-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    outputs:
+      deploy: ${{ steps.changed.outputs.deploy }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ATALAYA_DB: ${{ github.workspace }}/state/atalaya.db
+      ATALAYA_CONCURRENCY: "3"
+      ATALAYA_VILLAGE_RETENTION_DAYS: "5"     # world_export compara con 1 y 3 instantáneas atrás
+      ATALAYA_DAY_RETENTION_DAYS: "60"        # historial por jugador/alianza y eventos
+      ATALAYA_ENDED_RETENTION_DAYS: "14"      # mundos terminados
+      ATALAYA_USER_AGENT: "AtalayaBot/1.0 (+https://github.com/${{ github.repository }}; public map.sql, 1 download/day)"
+      ATALAYA_ALERT_RULES: ${{ secrets.ATALAYA_ALERT_RULES }}
+      ATALAYA_EXTRA_SERVERS: ${{ vars.ATALAYA_EXTRA_SERVERS }}
+      ATALAYA_IGNORE_SERVERS: ${{ vars.ATALAYA_IGNORE_SERVERS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Dependencias
+        run: pip install -r backend/requirements.txt
+
+      - name: Restaurar la base
+        run: |
+          mkdir -p state
+          asset=$(gh api "repos/${{ github.repository }}/releases/tags/state" \
+                    --jq '[.assets[] | select(.name | test("^atalaya-.*\\.db\\.zst$"))] | sort_by(.created_at) | last | .name // empty' 2>/dev/null || true)
+          if [ -n "$asset" ]; then
+            gh release download state --pattern "$asset" --dir state
+            zstd -d -q "state/$asset" -o state/atalaya.db
+            rm "state/$asset"
+            echo "Restaurada $asset ($(du -h state/atalaya.db | cut -f1))"
+          elif [ "${{ inputs.fresh }}" = "true" ]; then
+            echo "::warning::No hay base guardada: se empieza de cero"
+          else
+            # Nunca empezar de cero sin querer: se perdería todo el historial al guardar.
+            echo "::error::No se encontró la base en la release 'state'. Lánzalo a mano con fresh=true para empezar de cero."
+            exit 1
+          fi
+          echo "BEFORE=$(cd backend && python -m atalaya.cli fingerprint)" >> "$GITHUB_ENV"
+
+      - name: Recolectar
+        id: collect
+        continue-on-error: true   # si falla, se publica lo que ya había
+        working-directory: backend
+        run: python -m atalaya.cli collect
+
+      - name: ¿Hay cambios?
+        id: changed
+        working-directory: backend
+        run: |
+          after=$(python -m atalaya.cli fingerprint)
+          if [ "$after" != "$BEFORE" ]; then echo "data=true" >> "$GITHUB_OUTPUT"; else echo "data=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$after" != "$BEFORE" ] || [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Sin datos nuevos: no se guarda ni se despliega."
+          fi
+
+      - name: Podar y guardar la base
+        if: steps.changed.outputs.data == 'true'
+        run: |
+          (cd backend && python -m atalaya.cli prune --vacuum)
+          name="atalaya-$(date -u +%Y%m%d-%H%M%S).db.zst"
+          zstd -q -T0 -10 state/atalaya.db -o "state/$name"
+          if ! gh release view state >/dev/null 2>&1; then
+            gh release create state --title "Estado del recolector" --latest=false --prerelease \
+              --notes "Base SQLite de Atalaya entre pasadas de GitHub Actions. Se actualiza sola; no borrar."
+          fi
+          gh release upload state "state/$name"
+          # Se conservan las dos últimas por si una subida queda a medias.
+          gh api "repos/${{ github.repository }}/releases/tags/state" \
+            --jq '[.assets[] | select(.name | test("^atalaya-.*\\.db\\.zst$"))] | sort_by(.created_at) | reverse | .[2:] | .[].name' |
+            while read -r old; do gh release delete-asset state "$old" -y; done
+          echo "Guardada $name ($(du -h "state/$name" | cut -f1))"
+
+      - name: Generar la web
+        if: steps.changed.outputs.deploy == 'true'
+        run: |
+          (cd backend && python -m atalaya.cli export-static ../_site/data)
+          python web/build.py --static data --out _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.changed.outputs.deploy == 'true'
+        with:
+          path: _site
+
+      - name: Mantener vivo el cron
+        # GitHub desactiva los workflows programados de un repositorio sin actividad durante 60 días.
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 50 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Mantenimiento: mantener activo el recolector programado"
+            git push
+          fi
+
+      - name: Resultado
+        if: always()
+        run: |
+          if [ "${{ steps.collect.outcome }}" = "failure" ]; then
+            echo "::error::La recolección falló; se publica lo que ya había"
+            exit 1
+          fi
+
+  deploy:
+    needs: collect
+    if: ${{ !cancelled() && needs.collect.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Desplegar en GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

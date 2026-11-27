@@ -1,0 +1,25 @@
+services:
+  # API + interfaz web en http://localhost:8000
+  web:
+    build: .
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    volumes: ["atalaya-data:/data"]
+    environment:
+      ATALAYA_DB: /data/atalaya.db
+
+  # Recolector: descubre mundos y descarga map.sql (una vez al día por mundo; comprueba cada hora)
+  collector:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "atalaya.cli", "collect", "--loop"]
+    volumes: ["atalaya-data:/data"]
+    environment:
+      ATALAYA_DB: /data/atalaya.db
+      ATALAYA_LOOP_MINUTES: "60"
+      ATALAYA_CONCURRENCY: "3"
+      # Si el descubrimiento automático falla, añade mundos a mano:
+      # ATALAYA_EXTRA_SERVERS: "ts1.x1.europe.travian.com,ts3.x3.international.travian.com"
+
+volumes:
+  atalaya-data:
