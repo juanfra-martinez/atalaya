@@ -44,9 +44,9 @@ jobs:
       ATALAYA_EXTRA_SERVERS: ${{ vars.ATALAYA_EXTRA_SERVERS }}
       ATALAYA_IGNORE_SERVERS: ${{ vars.ATALAYA_IGNORE_SERVERS }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -114,9 +114,8 @@ jobs:
         run: |
           (cd backend && python -m atalaya.cli export-static ../_site/data)
           python web/build.py --static data --out _site/index.html
-          touch _site/.nojekyll
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: steps.changed.outputs.deploy == 'true'
         with:
           path: _site
@@ -150,4 +149,4 @@ jobs:
     steps:
       - name: Desplegar en GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
