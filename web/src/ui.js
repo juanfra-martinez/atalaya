@@ -36,6 +36,7 @@
     farm: '<path d="M10 6h10M10 12h10M10 18h10M3.5 6l1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/>',
     arrowUp: '<path d="M12 20V5M6 11l6-6 6 6"/>',
     arrowDown: '<path d="M12 4v15M6 13l6 6 6-6"/>',
+    cloud: '<path d="M7 19a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 17.9 9.6 4.7 4.7 0 0 1 17.3 19H7z"/>',
     users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.8"/><path d="M15.5 14.2A5.5 5.5 0 0 1 21.5 20"/>',
   };
   A.icon = (n, cls = "") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ""}</svg>`;

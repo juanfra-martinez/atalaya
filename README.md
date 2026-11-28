@@ -53,7 +53,48 @@ Limitaciones frente al servidor:
 - Los mundos de `ATALAYA_EXTRA_SERVERS` y `ATALAYA_IGNORE_SERVERS` se definen como *variables* del repositorio.
 - El repositorio tiene que ser público para tener GitHub Pages y minutos de Actions ilimitados con el plan gratuito. La base de la release es pública, igual que los `map.sql` de los que sale.
 
-Lo que el usuario guarda (aldea, vigilados, listas de vacas, terreno, operaciones) vive en su navegador, igual que con el servidor.
+Lo que el usuario guarda (aldea, vigilados, listas de vacas, terreno, operaciones) vive en su navegador, igual que con el servidor, salvo que inicie sesión (siguiente apartado).
+
+### Cuentas y sincronización (opcional, con Supabase)
+
+Cada jugador puede iniciar sesión para tener sus datos en todos sus dispositivos. Es **opcional**: sin sesión la web funciona exactamente igual y no carga nada de fuera. Se entra con un **enlace o código por correo** y, si se activa, con **Discord**. El botón de la nube, arriba a la derecha, muestra si hay sesión y el estado (sincronizado, sincronizando, sin conexión, error); al pulsarlo se entra, se sale, se sincroniza a mano, se descargan los datos o se borra la cuenta.
+
+**Qué se sincroniza** (claves de `A.store`, por mundo las que llevan `:<mundo>`):
+
+| Se sincroniza | Se queda en el navegador |
+|---|---|
+| `homes` aldea de cada mundo · `watch` vigilados · `rules:<mundo>` reglas de alerta · `webhook` el de Discord de las alertas · `fbMarks:<mundo>` marcas del asistente · `farmText:<mundo>`, `farmArmy:<mundo>` lista de vacas pegada y ejército · `reportText:<mundo>` informe pegado · `culture:<mundo>` puntos de cultura · `incoming:<mundo>` ataques apuntados · `ops:<mundo>` operación · `land:<mundo>` terreno · `army:<mundo>` tropas del planificador | Preferencias de interfaz: `theme`, `lang`, `sid` (último mundo), `filters`, `mapMode`, `nb`, `landView`, `opsUtc`, `srv:prefs`, `fbPrefs`. Estado pasajero del asistente de listas, ligado a la pestaña del juego: `fbq:<mundo>`, `fbResume` |
+
+**Cómo se fusiona.** Una fila por clave en la tabla `user_data(user_id, key, value jsonb, updated_at, synced_at)`. Cada escritura queda apuntada con su hora y se sube a los 2-3 segundos; los cambios de otros dispositivos se bajan al abrir la página, al volver a la pestaña y cada 90 s. **Gana el más reciente por clave**, y el servidor lo garantiza: un disparador ignora una escritura con `updated_at` anterior al que ya tiene. Lo que había en el navegador antes de iniciar sesión por primera vez se **fusiona** con la nube sin perder nada (objetos clave a clave, listas sin repetir) y se guarda además una copia local en `~backup:<clave>`. Sin conexión, los cambios esperan y se suben al volver. Si en el mismo navegador entra otra cuenta, los datos de la anterior no se suben a la nueva. De un HAR pegado solo se sube el JSON de las respuestas (sin cabeceras ni cookies del juego).
+
+**Seguridad.** La clave pública (*anon* o *publishable*) va en el HTML: es pública por diseño y solo permite lo que dejan las políticas. La tabla tiene **Row Level Security**: cada usuario solo lee y escribe sus filas. Hay cuota por usuario (2000 claves, 25 MB, 1 MB por clave) para que nadie llene la base gratuita. `web/build.py` se niega a publicar la clave secreta (`service_role` o `sb_secret_…`). supabase-js se carga de jsDelivr con versión fija (2.118.0) e integridad SRI, y solo cuando el jugador usa la cuenta.
+
+**Puesta en marcha** (una vez, unos 10 minutos):
+
+1. Crea un proyecto en [supabase.com](https://supabase.com) con el plan *Free* (no pide tarjeta). Elige la región **Central EU (Frankfurt)** para que los datos se queden en la UE.
+2. *SQL Editor → New query*: pega [`supabase/schema.sql`](supabase/schema.sql) y pulsa *Run*. Crea la tabla, las políticas, el disparador y la función `delete_my_account` (para que cada usuario pueda borrar su cuenta). Se puede ejecutar otra vez sin problema.
+3. *Authentication → URL Configuration*: *Site URL* `https://juanfra-martinez.github.io/atalaya/`, y en *Redirect URLs* esa misma y `http://localhost:8766/` (para probar en local).
+4. *Authentication → Emails → Templates*: en **Magic Link** y en **Confirm signup** añade el código, por ejemplo `<p>O escribe este código en Atalaya: <b>{{ .Token }}</b></p>`. Así se puede entrar escribiendo el código en el dispositivo donde se pidió. El enlace funciona igualmente en cualquier navegador (inicia sesión en el que lo abra). Supabase solo deja editar las plantillas con un SMTP propio (paso 5); hasta entonces el correo trae solo el enlace.
+5. **Correo para usuarios reales.** El servidor de correo que trae Supabase es para pruebas: hoy solo envía a los miembros del equipo del proyecto y unos pocos correos por hora. Para abrirlo a todos, configura un SMTP propio en *Authentication → Emails → SMTP Settings* (por ejemplo [Resend](https://resend.com) o [Brevo](https://www.brevo.com), con plan gratuito) y sube el límite en *Authentication → Rate Limits*. Entrar con Discord no necesita correo.
+6. *(Opcional) Discord*: crea una aplicación en el [portal de desarrolladores de Discord](https://discord.com/developers/applications), en *OAuth2* añade la redirección `https://<tu-proyecto>.supabase.co/auth/v1/callback`, y pega el *Client ID* y el *Client Secret* en *Authentication → Sign In / Providers → Discord*.
+7. *Project Settings → API Keys* (o *Data API*): copia la **Project URL** y la clave **pública** (*anon* o *publishable*). Nunca la *service_role* / *secret*.
+8. En GitHub, *Settings → Secrets and variables → Actions → **Variables*** (no secretos, porque son públicos):
+   - `ATALAYA_SUPABASE_URL`: la Project URL (`https://<ref>.supabase.co`).
+   - `ATALAYA_SUPABASE_ANON_KEY`: la clave pública.
+   - `ATALAYA_AUTH_PROVIDERS` *(opcional)*: `discord` si hiciste el paso 6.
+   - `ATALAYA_SUPABASE_REGION` *(opcional)*: cómo se nombra la región en la política de privacidad, por ejemplo `la Unión Europea (Fráncfort, Alemania)`.
+   - `ATALAYA_PRIVACY_CONTACT` *(opcional)*: correo o URL para las solicitudes de privacidad. Sin ella se muestra la página de incidencias del repositorio, que es pública: mejor un correo.
+9. Lanza el workflow a mano (*Actions → Recolectar y publicar → Run workflow*) o sube cualquier cambio a `main`. Mientras haya URL y clave configuradas, cada pasada hace además una petición mínima a Supabase para que el proyecto gratuito no se pause por inactividad (se pausa tras una semana sin uso).
+
+Para probar en local, con los datos de una pasada en `web/dist/site/data`:
+
+```bash
+python web/build.py --static data --out web/dist/site/index.html \
+  --supabase-url https://<ref>.supabase.co --supabase-key <clave pública>
+python -m http.server 8766 --directory web/dist/site   # http://localhost:8766/
+```
+
+**Privacidad (RGPD).** Los correos son datos personales. La web incluye una política de privacidad (enlace *Privacidad* en el pie del menú, `#privacy`) que explica qué se guarda, para qué, dónde, cuánto tiempo y cómo ejercer los derechos. Desde la propia web el usuario descarga sus datos en JSON (portabilidad) y borra su cuenta con todo lo de la nube (supresión). Como responsable, conviene aceptar el acuerdo de tratamiento de datos (DPA) de Supabase desde su panel y atender las solicitudes que lleguen al contacto configurado.
 
 ### Sin Docker
 
@@ -85,7 +126,7 @@ python -m atalaya.cli import map.sql --server ts1.x1.europe.travian.com --day 20
 
 ```bash
 cd backend && python -m pytest -q
-node --test web/tests/*.test.mjs         # lógica del navegador (listas de vacas, datos del juego, ataques, vecindario, tropas, terreno, operaciones, estadísticas de mundos)
+node --test web/tests/*.test.mjs         # lógica del navegador (listas de vacas, datos del juego, ataques, vecindario, tropas, terreno, operaciones, estadísticas de mundos, sincronización de cuentas)
 ```
 
 Cubren el parser (11 y 16 columnas, escapes, gzip y varias tuplas por INSERT), la distancia en el mapa que da la vuelta, el tiempo de viaje, el modelo de inactividad, los eventos, la exportación, las alertas, el descubrimiento de mundos y la API.
@@ -191,7 +232,7 @@ Un mundo grande tiene unas 20–60 mil aldeas. Con unos 100 mundos activos salen
 
 - Atalaya **solo** usa el `map.sql` público y lo que el usuario escribe. **No** inicia sesión por nadie, **no** automatiza acciones del juego y **no** incluye extensión de navegador, porque Travian prohíbe las herramientas que interactúan con el juego. Revisa las reglas vigentes de Travian antes de publicar el servicio.
 - Muestra siempre el aviso “herramienta no oficial” y no uses marcas ni logotipos de Travian Games.
-- RGPD: los nombres de jugador son seudónimos públicos del juego, pero en la UE siguen siendo datos personales. Publica una política de privacidad, limita la retención (`ATALAYA_VILLAGE_RETENTION_DAYS`) y atiende las solicitudes de borrado. Los webhooks de Discord se guardan en el servidor: protégelos.
+- RGPD: los nombres de jugador son seudónimos públicos del juego, pero en la UE siguen siendo datos personales. Publica una política de privacidad, limita la retención (`ATALAYA_VILLAGE_RETENTION_DAYS`) y atiende las solicitudes de borrado. Los webhooks de Discord se guardan en el servidor: protégelos. Con las cuentas opcionales, la política de privacidad de la web (`#privacy`) cubre los correos y los datos sincronizados; ver *Cuentas y sincronización*.
 - Verificado contra los mundos reales (noviembre de 2026): `status.travian.com`, el calendario del lobby y `/api/v1/info` responden sin sesión; `map.sql` tiene 16 columnas y aparecen los `tid` 6, 7 y 8. Sin verificar: el porcentaje de la plaza de torneos.
 
 ## Próximos pasos sugeridos
@@ -218,9 +259,10 @@ Ya apuntados antes:
 ```
 backend/atalaya/   config · mapsql · discovery · collector · ingest · analytics · geo · alerts · api · cli · synthetic · publish
 backend/tests/     pytest
-web/src/           styles.css · i18n.js · core.js · gamedata.js · worlds.js · intel.js · terrain.js · ops.js · farmbuild.js · ui.js · charts.js · map.js · views-main.js · views-servers.js · views-more.js · views-intel.js · views-plan.js · views-ops.js · app.js
-web/tests/         node --test (intel.js con datos reales de Asia 9; tropas, terreno, mapa y lista de vacas del juego con datos de International 7; estadísticas de worlds.js)
+web/src/           styles.css · i18n.js · core.js · gamedata.js · worlds.js · intel.js · terrain.js · ops.js · farmbuild.js · ui.js · charts.js · map.js · views-main.js · views-servers.js · views-more.js · views-intel.js · views-plan.js · views-ops.js · sync.js · app.js
+web/tests/         node --test (intel.js con datos reales de Asia 9; tropas, terreno, mapa y lista de vacas del juego con datos de International 7; estadísticas de worlds.js; fusión y sincronización de sync.js)
 web/build.py       empaqueta en un único HTML (web/dist/index.html, demo.html con datos incrustados, o --static para GitHub Pages)
 .github/workflows/ recolección cada hora y publicación en GitHub Pages
+supabase/          schema.sql: tabla, políticas y funciones de las cuentas opcionales
 scripts/           capturas y comprobación con Playwright
 ```

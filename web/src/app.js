@@ -14,7 +14,7 @@
         <div class="brand">${A.logo()}<div><b>Atalaya</b><small>Travian Legends</small></div></div>
         <div><div class="nav-label">${t("nav.world")}</div><nav class="nav" id="nav">${NAV.map(([k, ic]) => `<a href="#${k}" data-k="${k}">${A.icon(ic)}<span>${t("nav." + k)}</span>${k === "watch" ? `<span class="count" id="nav-watch"></span>` : k === "inactives" ? `<span class="count" id="nav-inact"></span>` : ""}</a>`).join("")}</nav></div>
         <div><div class="nav-label">${t("nav.global")}</div><nav class="nav"><a href="#servers" data-k="servers">${A.icon("servers")}<span>${t("nav.servers")}</span><span class="count" id="nav-servers"></span></a></nav></div>
-        <div class="side-foot"><span class="dot"></span>${A.DEMO ? t("foot.demo") : t("foot.live")}<br><span id="foot-upd"></span><br><span style="font-size:11px">${t("foot.disclaimer")}</span></div>
+        <div class="side-foot"><span class="dot"></span>${A.DEMO ? t("foot.demo") : t("foot.live")}<br><span id="foot-upd"></span><br><span style="font-size:11px">${t("foot.disclaimer")} <a href="#privacy">${t("foot.privacy")}</a></span></div>
       </aside>
       <div class="side-scrim" id="side-scrim"></div>
       <div class="main">
@@ -24,6 +24,7 @@
           <button class="search-btn" id="sb">${A.icon("search").replace("<svg", '<svg width="16" height="16"')}<span>${t("pal.ph")}</span><kbd>Ctrl K</kbd></button>
           <div class="top-actions">
             <div class="seg lang" id="lang"><button data-l="es" aria-pressed="${A.lang === "es"}">ES</button><button data-l="en" aria-pressed="${A.lang === "en"}">EN</button></div>
+            ${A.sync?.enabled ? `<button class="icon-btn acct" id="acct"></button>` : ""}
             <button class="icon-btn" id="theme" aria-label="${A.esc(t("nav.theme"))}"></button>
           </div>
         </header>
@@ -37,6 +38,7 @@
     A.$("#theme").onclick = () => { const cur = A.theme(); A.setTheme(cur === "dark" ? "light" : "dark"); };
     A.paintThemeBtn();
     A.updateServerCount();
+    if (A.$("#acct")) { A.$("#acct").onclick = () => A.sync.open(); A.sync.paint(); }
   };
   A.updateServerCount = () => { const el = A.$("#nav-servers"); if (el) el.textContent = A.state.servers.filter((s) => s.status === "active").length || ""; };
   A.theme = () => document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -74,13 +76,13 @@
     cleanup?.(); cleanup = null;
     const vi = A.$("#vi");
     vi.onclick = null;
-    if (view !== "servers" && !A.state.world) { location.hash = "servers"; return; }
+    if (view !== "servers" && view !== "privacy" && !A.state.world) { location.hash = "servers"; return; }
     vi.innerHTML = "";
     if (A.DEMO) vi.insertAdjacentHTML("beforeend", `<div class="demo-ribbon rise">${A.icon("clock").replace("<svg", '<svg width="16" height="16"')}<span>${t("demo.ribbon")}</span></div>`);
     const holder = document.createElement("div"); holder.style.cssText = "display:flex;flex-direction:column;gap:20px"; vi.appendChild(holder);
     cleanup = A.views[view](holder) || null;
     A.$("#view").scrollTop = 0;
-    document.title = `${t("nav." + view)} · Atalaya`;
+    document.title = `${view === "privacy" ? t("priv.title") : t("nav." + view)} · Atalaya`;
   };
 
   /* ---------- perfiles (panel lateral) ---------- */
@@ -203,6 +205,7 @@
   /* ---------- arranque ---------- */
   A.boot = async () => {
     const th = A.store.get("theme", null); if (th) document.documentElement.dataset.theme = th;
+    A.sync?.boot();
     try {
       await A.loadServers();
     } catch (err) {
@@ -212,7 +215,7 @@
     /* Solo se abre un mundo que ya tenga datos; si aún no hay ninguno se muestra la lista de mundos. */
     const ready = A.state.servers.filter(A.hasData);
     const sid = ready.find((s) => s.id === A.state.sid)?.id || ready.slice().sort((a, b) => b.players - a.players)[0]?.id;
-    if (location.hash === "#servers") {
+    if (location.hash === "#servers" || location.hash === "#privacy") {
       /* La lista de mundos no necesita un mundo cargado: se muestra ya y el mundo se carga detrás. */
       A.route();
       if (sid) A.loadWorld(sid).then(A.updateTop, () => {});
