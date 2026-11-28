@@ -149,6 +149,41 @@ test("de un HAR solo sube el JSON de las respuestas, sin cabeceras ni cookies", 
 });
 
 /* ---------- dos dispositivos ---------- */
+/* ---------- errores ---------- */
+test("los errores habituales de Supabase se explican en el idioma de la interfaz", () => {
+  const { A } = device(fakeServer(), null);
+  const S = A.sync;
+  const es = (k) => A.t("acct.err." + k);
+  assert.equal(S.explain({ name: "AuthApiError", status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" }), es("rateEmail"));
+  assert.equal(S.explain({ message: "email rate limit exceeded" }), es("rateEmail"), "sin código, por el texto");
+  assert.equal(S.explain({ status: 429, message: "Request rate limit reached" }), es("rateReq"));
+  assert.equal(S.explain({ code: "otp_expired", message: "Token has expired or is invalid" }), es("expired"));
+  assert.equal(S.explain({ code: "otp_expired", message: "Email link is invalid or has expired" }), es("expired"), "error_code que vuelve en la dirección");
+  assert.equal(S.explain({ code: "email_address_not_authorized", message: "Email address not authorized" }), es("notAuthorized"));
+  assert.equal(S.explain({ code: "refresh_token_not_found", message: "Invalid Refresh Token" }), es("session"));
+  assert.equal(S.explain({ code: "P0001", message: "atalaya: se ha superado el espacio por usuario (25 MB)" }), es("quotaSize"));
+  assert.equal(S.explain({ code: "P0001", message: "atalaya: demasiadas claves para este usuario" }), es("quotaKeys"));
+  assert.equal(S.explain({ code: "23514", message: "new row violates check constraint" }), es("tooBig"));
+  assert.equal(S.explain(new TypeError("Failed to fetch")), es("network"));
+  assert.equal(S.explain({ name: "AuthRetryableFetchError", status: 0, message: "{}" }), es("network"));
+  assert.equal(S.explain({ status: 503, message: "Service Unavailable" }), es("server"));
+  assert.equal(S.explain({ message: "algo raro" }), A.t("acct.error", { e: "algo raro" }), "lo desconocido se muestra tal cual");
+  assert.ok(!es("rateEmail").startsWith("acct."), "la traducción existe");
+  A.setLang?.("en");
+  if (A.lang === "en") assert.match(S.explain({ code: "over_email_send_rate_limit" }), /Too many emails/);
+});
+
+test("si la nube rechaza una subida por la cuota, el estado lo explica", async () => {
+  const server = fakeServer();
+  const client = server.client;
+  server.client = (uid) => ({ ...client(uid), upsert: async () => ({ error: { code: "P0001", message: "atalaya: se ha superado el espacio por usuario (25 MB)" } }) });
+  const d = device(server, "u1", { homes: { s: { x: 1, y: 2, tid: 1 } } });
+  d.A.sync.boot();
+  for (let i = 0; i < 200 && d.A.sync.state.phase !== "error"; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(d.A.sync.state.phase, "error");
+  assert.equal(d.A.sync.state.error, d.A.t("acct.err.quotaSize"));
+});
+
 test("dos dispositivos con la misma cuenta acaban con los mismos datos", async () => {
   const server = fakeServer();
   const pc = device(server, "u1", { homes: { s: { x: 1, y: 1, tid: 1 } }, theme: "dark" });

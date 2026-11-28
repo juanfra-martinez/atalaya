@@ -759,3 +759,4 @@ body.fb-pip { padding: 10px 12px 14px; background: var(--bg); overflow: auto; he
 .prose h2:first-child { margin-top: 0; }
 .prose p, .prose ul { margin: 0 0 10px; }
 .prose a { color: var(--accent); }
+.acct-err { margin: 0; padding: 9px 11px; border-radius: 8px; font-size: 13px; line-height: 1.45; color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
