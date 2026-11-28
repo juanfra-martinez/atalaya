@@ -112,7 +112,10 @@
     s.onerror = () => rej(new Error(t("acct.cdnError")));
     document.head.appendChild(s);
   }).then((lib) => {
-    sb = lib.createClient(CFG.url, CFG.key, { auth: { flowType: "pkce", storageKey: AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+    /* Flujo implícito: el enlace del correo inicia sesión en el navegador que lo abra (con PKCE solo valdría en el
+       mismo en que se pidió, y mucha gente pide el enlace en el ordenador y abre el correo en el móvil). Los tokens
+       vuelven en el fragmento (#), que no llega a ningún servidor; boot() los recoge y los quita antes de enrutar. */
+    sb = lib.createClient(CFG.url, CFG.key, { auth: { flowType: "implicit", storageKey: AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
     /* No se puede esperar a otras llamadas de supabase dentro de este aviso: se atiende en la siguiente vuelta. */
     sb.auth.onAuthStateChange((_ev, session) => setTimeout(() => onSession(session), 0));
     return sb;
@@ -381,19 +384,29 @@
 
   /* ---------- arranque ---------- */
   S.boot = () => {
-    /* Un enlace caducado vuelve con el error en la dirección: se avisa y se limpia antes de enrutar. */
+    /* El enlace del correo (o Discord) vuelve con los tokens o con un error en el fragmento: se recogen y se quitan
+       de la dirección y del historial antes de que el enrutador lo lea como una vista. */
     const h = new URLSearchParams(location.hash.slice(1)), q = new URLSearchParams(location.search);
-    const err = q.get("error_description") || (h.has("error_description") ? h.get("error_description") : null);
-    if (err) {
-      setTimeout(() => A.toast(t("acct.error", { e: err })), 600);
-      if (h.has("error_description")) history.replaceState(history.state, "", location.pathname + location.search);
-      cleanUrl();
-    }
+    const tokens = h.has("access_token") && h.has("refresh_token") ? { access_token: h.get("access_token"), refresh_token: h.get("refresh_token") } : null;
+    const err = q.get("error_description") || h.get("error_description");
+    if (tokens || h.has("error_description")) history.replaceState(history.state, "", location.pathname + location.search);
+    if (err) { setTimeout(() => A.toast(t("acct.error", { e: err })), 600); cleanUrl(); }
     if (!CFG) return;
     let hasSession = false;
-    try { hasSession = !!localStorage.getItem(AUTH_KEY) || !!localStorage.getItem(AUTH_KEY + "-code-verifier"); } catch { /* */ }
+    try { hasSession = !!localStorage.getItem(AUTH_KEY); } catch { /* */ }
     /* Sin sesión no se carga nada de fuera: la web funciona igual que sin cuentas. */
-    if (hasSession || q.has("code")) { set({ phase: "loading" }); load().then(() => sb.auth.getSession()).then(({ data }) => onSession(data?.session), () => {}); }
+    if (hasSession || tokens) {
+      set({ phase: "loading" });
+      load()
+        .then(() => (tokens ? sb.auth.setSession(tokens) : sb.auth.getSession()))
+        .then(({ data, error }) => {
+          if (error) throw error;
+          onSession(data?.session);
+        })
+        .catch((e) => {
+          if (sb) { set({ phase: "out", user: null }); A.toast(t("acct.error", { e: e.message })); }
+        });
+    }
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && uid && Date.now() - lastRun > 20e3) sync(); });
     window.addEventListener("online", () => { if (uid) sync(); });
     window.addEventListener("offline", () => { if (uid) set({ phase: "offline" }); });
