@@ -78,19 +78,19 @@
     const sx = (i) => L + ((i + 0.5) / n) * (W - L - R);
     const sy = (v) => T + (1 - v / max) * (H - T - B);
     let g = "";
-    ticks.forEach((t) => { g += `<line class="gridl" x1="${L}" x2="${W - R}" y1="${sy(t)}" y2="${sy(t)}"/><text x="${L - 6}" y="${sy(t) + 4}" text-anchor="end">${t}</text>`; });
+    ticks.forEach((t) => { g += `<line class="gridl" x1="${L}" x2="${W - R}" y1="${sy(t)}" y2="${sy(t)}"/><text x="${L - 6}" y="${sy(t) + 4}" text-anchor="end">${A.compact(t)}</text>`; });
     labels.forEach((lb, i) => {
       let acc = 0;
       stacks.forEach((st) => {
         const v = st.values[i] || 0; if (!v) return;
-        g += `<rect x="${sx(i) - bw / 2}" y="${sy(acc + v)}" width="${bw}" height="${Math.max(0, sy(acc) - sy(acc + v))}" fill="${st.color}" rx="2"><title>${A.esc(lb)} · ${A.esc(st.name)}: ${v}</title></rect>`;
+        g += `<rect x="${sx(i) - bw / 2}" y="${sy(acc + v)}" width="${bw}" height="${Math.max(0, sy(acc) - sy(acc + v))}" fill="${st.color}" rx="2"><title>${A.esc(lb)} · ${A.esc(st.name)}: ${A.fmt(v)}</title></rect>`;
         acc += v;
       });
       const every = Math.max(1, Math.ceil(n / 8));
       if (i % every === 0 || i === n - 1) g += `<text x="${sx(i)}" y="${H - 6}" text-anchor="middle">${A.esc(lb)}</text>`;
     });
     el.classList.add("chart");
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${A.esc(stacks.map((s) => s.name).join(", "))}">${g}</svg>`;
   };
 
   /* Tooltip común de columnas y burbujas: se mantiene dentro del gráfico y escribe los datos como texto. */

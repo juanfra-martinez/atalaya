@@ -75,13 +75,13 @@
     name: { get: (s) => s.name, dir: 1 },
     region: { get: (s) => s.region || null, dir: 1 },
   };
-  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+  const byName = (a, b) => a.name.localeCompare(b.name, A.locale?.(), { numeric: true });
   A.sortWorlds = (list, key, dir) => {
     const get = (A.WORLD_SORTS[key] || A.WORLD_SORTS.players).get;
     return list.slice().sort((a, b) => {
       const va = get(a), vb = get(b);
       if (va == null || vb == null) return (va == null) - (vb == null) || byName(a, b);
-      const c = typeof va === "string" ? va.localeCompare(vb, undefined, { numeric: true }) : va - vb;
+      const c = typeof va === "string" ? va.localeCompare(vb, A.locale?.(), { numeric: true }) : va - vb;
       return c * dir || byName(a, b);
     });
   };
@@ -142,7 +142,7 @@
       g.worlds++; g.players += s.players || 0; g.population += s.population || 0;
       groups.set(k, g);
     }
-    return [...groups.values()].sort((a, b) => b.players - a.players || b.worlds - a.worlds || String(a.key).localeCompare(String(b.key), undefined, { numeric: true }));
+    return [...groups.values()].sort((a, b) => b.players - a.players || b.worlds - a.worlds || String(a.key).localeCompare(String(b.key), A.locale?.(), { numeric: true }));
   };
 
   A.AGE_BANDS = [[1, 7], [8, 30], [31, 90], [91, 180], [181, Infinity]];

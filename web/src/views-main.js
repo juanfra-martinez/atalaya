@@ -69,6 +69,7 @@
     const mv = A.$("#dash-movers", root);
     const drawMovers = (dir) => {
       const list = w.players.filter((p) => p.d7 != null && p.status !== "natar").sort((a, b) => (dir === "up" ? b.d7 - a.d7 : a.d7 - b.d7)).slice(0, 7);
+      if (!list.length) { mv.innerHTML = A.ui.empty(t("inact.needHistory")); return; }
       mv.innerHTML = `<table class="t"><thead><tr><th>${t("common.player")}</th><th>${t("common.alliance")}</th><th class="r">${t("common.pop")}</th><th class="r">${t("dash.d7")}</th><th></th></tr></thead><tbody>
         ${list.map((p) => `<tr><td>${A.ui.player(p)}</td><td>${A.ui.ally(p.aid)}</td><td class="r">${A.fmt(p.pop)}</td><td class="r">${A.ui.delta(p.d7)}</td><td>${A.spark(p.popHist, { w: 80, h: 22, color: dir === "up" ? "var(--good)" : "var(--bad)" })}</td></tr>`).join("")}</tbody></table>`;
     };
@@ -78,9 +79,9 @@
   const kpi = (label, value, delta, spark, cls = "", note = "") => `<div class="card kpi rise ${cls}"><span class="label">${A.esc(label)}</span><span class="value">${value}</span>
     <span class="delta ${delta != null ? A.cls(delta) : "muted"}">${delta != null ? A.signed(delta) + " " + A.esc(t("dash.vsYesterday")) : A.esc(note)}</span>${spark}</div>`;
   const topPlayers = (list) => `<table class="t"><thead><tr><th>#</th><th>${t("common.player")}</th><th>${t("common.alliance")}</th><th class="r">${t("common.villagesShort")}</th><th class="r">${t("common.pop")}</th><th class="r">${t("dash.d7")}</th><th></th></tr></thead><tbody>
-    ${list.map((p, i) => `<tr><td class="rank">${i + 1}</td><td>${A.ui.tribe(p.tid, false)} ${A.ui.player(p)}</td><td>${A.ui.ally(p.aid)}</td><td class="r">${p.villages}</td><td class="r">${A.fmt(p.pop)}</td><td class="r">${A.ui.delta(p.d7)}</td><td>${A.spark(p.popHist, { w: 72, h: 20 })}</td></tr>`).join("")}</tbody></table>`;
+    ${list.map((p, i) => `<tr><td class="rank">${i + 1}</td><td>${A.ui.tribe(p.tid, false)} ${A.ui.player(p)}</td><td>${A.ui.ally(p.aid)}</td><td class="r">${A.fmt(p.villages)}</td><td class="r">${A.fmt(p.pop)}</td><td class="r">${A.ui.delta(p.d7)}</td><td>${A.spark(p.popHist, { w: 72, h: 20 })}</td></tr>`).join("")}</tbody></table>`;
   const topAlliances = (list) => `<table class="t"><thead><tr><th>#</th><th>${t("common.alliance")}</th><th class="r">${t("common.members")}</th><th class="r">${t("common.villagesShort")}</th><th class="r">${t("common.pop")}</th><th class="r">${t("dash.d7")}</th><th></th></tr></thead><tbody>
-    ${list.map((a, i) => `<tr><td class="rank">${i + 1}</td><td>${A.ui.ally(a.aid)}</td><td class="r">${a.members}</td><td class="r">${a.villages}</td><td class="r">${A.fmt(a.pop)}</td><td class="r">${A.ui.delta(a.d7)}</td><td>${A.spark(a.popHist, { w: 72, h: 20, color: A.PALETTE[i % A.PALETTE.length] })}</td></tr>`).join("")}</tbody></table>`;
+    ${list.map((a, i) => `<tr><td class="rank">${i + 1}</td><td>${A.ui.ally(a.aid)}</td><td class="r">${A.fmt(a.members)}</td><td class="r">${A.fmt(a.villages)}</td><td class="r">${A.fmt(a.pop)}</td><td class="r">${A.ui.delta(a.d7)}</td><td>${A.spark(a.popHist, { w: 72, h: 20, color: A.PALETTE[i % A.PALETTE.length] })}</td></tr>`).join("")}</tbody></table>`;
 
   /* ================= INACTIVOS ================= */
   const DEF = { maxDist: 25, popMin: 0, popMax: 2000, minDays: 3, minConf: 50, tribes: A.PLAYABLE.slice(), noAlly: false, exclude: "", hideNew: true, slowing: false, natars: false, attacked: true, hideListed: true, group: "village", unit: 0, ts: 0, art: 1 };
@@ -133,10 +134,10 @@
         <form class="card filters" id="in-f" autocomplete="off">
           <details id="f-det" open><summary><h3>${t("inact.filters")}</h3><span class="muted">${A.icon("menu").replace("<svg", '<svg width="16" height="16"')}</span></summary><div>
           ${range("maxDist", t("inact.maxDist"), 1, 120, f.maxDist, t("common.fields"))}
-          <div class="field"><span class="lbl">${t("inact.popRange")}</span><div class="row"><input class="input num" type="number" id="f-popMin" value="${f.popMin}" min="0" aria-label="min"><span class="muted">–</span><input class="input num" type="number" id="f-popMax" value="${f.popMax}" min="0" aria-label="max"></div></div>
+          <div class="field"><span class="lbl">${t("inact.popRange")}</span><div class="row"><input class="input num" type="number" id="f-popMin" value="${f.popMin}" min="0" aria-label="${A.esc(t("common.min"))}"><span class="muted">–</span><input class="input num" type="number" id="f-popMax" value="${f.popMax}" min="0" aria-label="${A.esc(t("common.max"))}"></div></div>
           ${range("minDays", t("inact.minDays"), 1, 14, f.minDays, t("common.daysShort"))}
           ${range("minConf", t("inact.minConf"), 0, 100, f.minConf, "%")}
-          <div class="field"><span class="lbl">${t("common.tribes")}</span><div class="tribe-toggles" id="f-tribes">${A.PLAYABLE.map((tid) => `<button type="button" data-tid="${tid}" aria-pressed="${f.tribes.includes(tid)}"><i style="background:var(${A.TRIBES[tid].color})"></i>${A.esc(t("tribe." + A.TRIBES[tid].key))}</button>`).join("")}</div></div>
+          <div class="field"><span class="lbl">${t("common.tribes")}</span><div class="tribe-toggles" id="f-tribes">${A.worldTribes().map((tid) => `<button type="button" data-tid="${tid}" aria-pressed="${f.tribes.includes(tid)}"><i style="background:var(${A.TRIBES[tid].color})"></i>${A.esc(t("tribe." + A.TRIBES[tid].key))}</button>`).join("")}</div></div>
           <div class="field"><label for="f-exclude">${t("inact.exclude")}</label><input class="input" id="f-exclude" value="${A.esc(f.exclude)}" placeholder="${A.esc(t("inact.excludePh"))}" list="ally-list"><datalist id="ally-list">${w.alliances.slice(0, 60).map((a) => `<option value="${A.esc(a.tag)}">`).join("")}</datalist></div>
           <div class="field" style="gap:8px">
             <label class="check"><input type="checkbox" id="f-noAlly" ${f.noAlly ? "checked" : ""}>${t("inact.noAlly")}</label>
@@ -151,7 +152,7 @@
           <h3>${t("inact.travel")}</h3>
           <div class="field"><label for="f-unit">${t("inact.unit", { tribe: t("tribe." + (A.TRIBES[home?.tid] || A.TRIBES[1]).key) })}</label><select class="input" id="f-unit">${(A.UNITS[home?.tid] || A.UNITS[1]).map((u, i) => `<option value="${i}" ${+f.unit === i ? "selected" : ""}>${A.esc(A.unitName(home?.tid || 1, i))} · ${u[2]}</option>`).join("")}</select></div>
           <div class="row"><div class="field" style="flex:1"><label for="f-ts">${t("inact.ts")}</label><input class="input num" type="number" id="f-ts" min="0" max="20" value="${f.ts}"></div>
-            <div class="field" style="flex:1"><label for="f-art">${t("inact.art")}</label><select class="input" id="f-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}" ${+f.art === x ? "selected" : ""}>×${x}</option>`).join("")}</select></div></div>
+            <div class="field" style="flex:1"><label for="f-art">${t("inact.art")}</label><select class="input" id="f-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}" ${+f.art === x ? "selected" : ""}>×${A.fmt(x, x % 1 ? 1 : 0)}</option>`).join("")}</select></div></div>
           <button type="button" class="btn ghost sm" id="f-reset">${t("inact.reset")}</button>
         </div></details></form>
         <div class="card">
@@ -177,8 +178,11 @@
       rows = A.findTargets(f);
       if (f.hideListed) { const n = rows.length; rows = rows.filter((r) => !listed.has(A.fbKey(r.v))); hiddenListed = n - rows.length; }
       else hiddenListed = 0;
+      const inRows = new Set(rows.map((r) => r.v.vid));
+      for (const id of ts.sel) if (!inRows.has(id)) ts.sel.delete(id);
+      const allSel = rows.length > 0 && rows.slice(0, ts.limit).every((r) => ts.sel.has(r.v.vid));
       const cols = [
-        { k: "sel", label: `<input type="checkbox" id="in-all" aria-label="${A.esc(t("inact.selectAll"))}">` },
+        { k: "sel", label: `<input type="checkbox" id="in-all" ${allSel ? "checked" : ""} aria-label="${A.esc(t("inact.selectAll"))}">` },
         { k: "prio", label: t("inact.prio"), cls: "r", sort: (r) => r.prio },
         { k: "vil", label: f.group === "player" ? t("inact.nearest") : t("inact.village"), sort: (r) => r.v.name },
         { k: "player", label: t("common.player"), sort: (r) => r.p.name.toLowerCase() },
@@ -197,9 +201,9 @@
       const shown = rows.slice(0, ts.limit);
       table.querySelector("tbody").innerHTML = shown.map((r) => `<tr class="${ts.sel.has(r.v.vid) ? "sel" : ""}">
           <td><input type="checkbox" data-sel="${r.v.vid}" ${ts.sel.has(r.v.vid) ? "checked" : ""} aria-label="${A.esc(r.v.name)}"></td>
-          <td class="r"><b class="num">${r.prio.toFixed(1)}</b></td>
+          <td class="r"><b class="num">${A.fmt(r.prio, 1)}</b></td>
           <td>${A.ui.coord(r.v.x, r.v.y)} <span class="muted">${A.esc(r.v.name)}</span>${f.group === "player" && r.n > 1 ? ` <span class="chip">+${r.n - 1}</span>` : ""}${listedChip(r.v)}</td>
-          <td>${A.ui.tribe(r.p.tid, false)} ${A.ui.player(r.p)} ${r.p.flags.includes("attacked") ? `<span class="chip" title="${A.esc(t("why.attacked"))}">${A.icon("swords").replace("<svg", '<svg width="12" height="12"')}</span>` : ""}</td>
+          <td>${A.ui.tribe(r.p.tid, false)} ${A.ui.player(r.p)} ${r.p.flags.includes("attacked") ? `<span class="chip" role="img" title="${A.esc(t("why.attacked"))}" aria-label="${A.esc(t("why.attacked"))}">${A.icon("swords").replace("<svg", '<svg width="12" height="12"')}</span>` : ""}</td>
           <td>${A.ui.ally(r.p.aid)}</td>
           <td class="r">${A.fmt(f.group === "player" ? r.p.pop : r.v.pop)}</td>
           <td class="r">${A.ui.delta(r.v.d3)}</td>
@@ -251,7 +255,7 @@
     const refreshListed = () => { listed = A.fbListed(); if (root.isConnected) render(); };
     const startFb = (list) => { if (list.length) A.farmBuilder(list, refreshListed); };
     const save = () => { A.saveFilters(f); render(); };
-    const num = (id, k) => { const el = A.$("#f-" + id, root); el.oninput = A.debounce(() => { f[k] = +el.value || 0; const o = A.$(`#v-${id}`, root); if (o) o.textContent = el.value; save(); }, 80); };
+    const num = (id, k) => { const el = A.$("#f-" + id, root); el.oninput = A.debounce(() => { if (el.value === "") return; f[k] = +el.value || 0; const o = A.$(`#v-${id}`, root); if (o) o.textContent = el.value; save(); }, 80); };
     ["maxDist", "minDays", "minConf", "popMin", "popMax", "ts"].forEach((k) => num(k, k));
     ["noAlly", "slowing", "hideNew", "attacked", "natars", "hideListed"].forEach((k) => (A.$("#f-" + k, root).onchange = (e) => { f[k] = e.target.checked; save(); }));
     A.$("#f-exclude", root).oninput = A.debounce((e) => { f.exclude = e.target.value; save(); }, 200);
@@ -321,18 +325,19 @@
       <p class="muted" style="margin:0">${t("home.hint")}</p>
       <div class="field"><label for="h-c">${t("home.coords")}</label><input class="input mono" id="h-c" value="${h.x}|${h.y}" placeholder="-12|45"></div>
       <div class="field"><label for="h-p">${t("home.orPlayer")}</label><input class="input" id="h-p" placeholder="${A.esc(t("home.playerPh"))}" list="h-pl"><datalist id="h-pl">${A.state.world.players.slice(0, 400).map((p) => `<option value="${A.esc(p.name)}">`).join("")}</datalist></div>
-      <div class="field"><span class="lbl">${t("home.tribe")}</span><div class="tribe-toggles" id="h-t">${A.PLAYABLE.map((tid) => `<button type="button" data-tid="${tid}" aria-pressed="${h.tid === tid}"><i style="background:var(${A.TRIBES[tid].color})"></i>${A.esc(t("tribe." + A.TRIBES[tid].key))}</button>`).join("")}</div></div>`,
+      <div class="field"><span class="lbl">${t("home.tribe")}</span><div class="tribe-toggles" id="h-t">${A.worldTribes().map((tid) => `<button type="button" data-tid="${tid}" aria-pressed="${h.tid === tid}"><i style="background:var(${A.TRIBES[tid].color})"></i>${A.esc(t("tribe." + A.TRIBES[tid].key))}</button>`).join("")}</div></div>`,
       `<button class="btn" data-close2>${t("common.cancel")}</button><button class="btn primary" id="h-save">${t("common.save")}</button>`);
     let tid = h.tid;
     m.querySelector("#h-t").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; tid = +b.dataset.tid; m.querySelectorAll("#h-t button").forEach((x) => x.setAttribute("aria-pressed", x === b)); };
     m.querySelector("#h-p").oninput = (e) => {
       const p = A.state.world.players.find((p) => p.name.toLowerCase() === e.target.value.toLowerCase());
-      if (p?.cap) { m.querySelector("#h-c").value = `${p.cap.x}|${p.cap.y}`; tid = p.tid; m.querySelectorAll("#h-t button").forEach((x) => x.setAttribute("aria-pressed", +x.dataset.tid === tid)); }
+      if (p?.cap) { m.querySelector("#h-c").value = `${p.cap.x}|${p.cap.y}`; if (A.PLAYABLE.includes(p.tid)) tid = p.tid; m.querySelectorAll("#h-t button").forEach((x) => x.setAttribute("aria-pressed", +x.dataset.tid === tid)); }
     };
     m.querySelector("[data-close2]").onclick = A.closeOverlays;
     m.querySelector("#h-save").onclick = () => {
       const c = A.parseCoord(m.querySelector("#h-c").value);
-      if (!c) { A.toast(t("home.bad")); return; }
+      const R = A.state.world?.R || 400;
+      if (!c || Math.abs(c.x) > R || Math.abs(c.y) > R) { A.toast(t("home.bad")); return; }
       A.state.home = { ...c, tid }; A.closeOverlays(); A.toast(t("home.saved", { c: A.coord(c.x, c.y) })); done?.();
     };
   };

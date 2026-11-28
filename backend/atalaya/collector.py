@@ -52,7 +52,7 @@ def _fetch_info(client: httpx.Client, host: str, known: bool = False) -> dict:
             if cal:
                 out["info"] = json.dumps(cal, separators=(",", ":"))
             return out
-    except (httpx.HTTPError, ValueError) as e:
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as e:  # respuesta rara: el mundo sigue sin calendario
         log.info("%s: sin /api/v1/info (%s)", host, e)
     return {}
 
@@ -137,7 +137,11 @@ def run_once(con: sqlite3.Connection, settings, *, discover_worlds: bool = True,
         with ThreadPoolExecutor(max_workers=max(1, settings.concurrency)) as pool:
             futs = [pool.submit(_fetch, client, r, settings.request_delay_s) for r in todo]
             for fut in as_completed(futs):
-                host, code, body, headers, info = fut.result()
+                try:
+                    host, code, body, headers, info = fut.result()
+                except Exception:  # noqa: BLE001 — un fallo inesperado en la descarga no debe parar la pasada
+                    log.exception("error al descargar un mundo")
+                    continue
                 try:
                     if info:
                         upsert_server(con, host, **info)

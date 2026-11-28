@@ -17,7 +17,7 @@
     const shared = q.get("o") ? A.opsDecode(q.get("o")) : null;
     const sw = q.get("w");
     /* Un enlace de otro mundo: se cambia a ese mundo (si Atalaya lo tiene) y se vuelve a pintar. */
-    if (shared && sw && sw !== A.state.sid && A.state.servers.some((s) => s.id === sw && A.hasData(s))) { A.selectWorld(sw).then((ok) => ok && A.route()); return; }
+    if (shared && sw && sw !== A.state.sid && A.state.servers.some((s) => s.id === sw && A.hasData(s)) && A.opsTried !== location.hash) { A.opsTried = location.hash; A.selectWorld(sw).then((ok) => ok && A.route()); return; }
     if (q.get("o") && !shared) A.toast(t("ops.badLink"));
     let op = shared || A.store.get(key, null) || A.opsNew(w);
     if (!Array.isArray(op.rows)) op = A.opsNew(w);
@@ -79,7 +79,7 @@
         <td><input class="input mono" data-f="from" value="${A.esc(r.from)}" placeholder="x|y" aria-label="${A.esc(t("tools.from"))}"><div class="ops-info" data-c="fi"></div></td>
         <td><input class="input mono" data-f="to" value="${A.esc(r.to)}" placeholder="x|y" list="op-pl" aria-label="${A.esc(t("tools.to"))}"><div class="ops-info" data-c="ti"></div></td>
         <td>${x.v ? "" : `<select class="input" data-f="tid" aria-label="${A.esc(t("common.tribe"))}">${A.PLAYABLE.map((tid) => `<option value="${tid}" ${tid === x.tid ? "selected" : ""}>${A.esc(t("tribe." + A.TRIBES[tid].key))}</option>`).join("")}</select>`}
-          <select class="input" data-f="unit" aria-label="${A.esc(t("ops.c.unit"))}">${A.UNITS[x.tid].slice(0, 9).map((u, i) => `<option value="${i}" ${i === x.unit ? "selected" : ""}>${A.esc(A.unitName(x.tid, i))} · ${u[2]}</option>`).join("")}</select></td>
+          <select class="input" data-f="unit" aria-label="${A.esc(t("ops.c.unit"))}">${A.UNITS[x.tid].slice(0, 9).map((u, i) => `<option value="${i}" ${i === x.unit ? "selected" : ""}>${A.esc(A.unitName(x.tid, i))} · ${A.fmt(u[2] * (op.speed || 1), 1)}</option>`).join("")}</select></td>
         <td><input class="input num" type="number" min="0" max="20" data-f="ts" value="${+r.ts || 0}" aria-label="${A.esc(t("inact.ts"))}"></td>
         <td><input class="input num" type="number" step="1" data-f="offset" value="${+r.offset || 0}" aria-label="${A.esc(t("ops.c.offset"))}"></td>
         <td class="r num" data-c="dist"></td><td class="r mono" data-c="sec"></td><td class="r mono" data-c="send"></td><td class="r mono" data-c="count"></td>

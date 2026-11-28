@@ -47,7 +47,8 @@ def create_app(db_path=None) -> FastAPI:
 
     @app.get("/api/health")
     def health():
-        n = con.execute("SELECT COUNT(*) FROM servers").fetchone()[0]
+        with lock:
+            n = con.execute("SELECT COUNT(*) FROM servers").fetchone()[0]
         return {"ok": True, "version": __version__, "servers": n}
 
     @app.get("/api/servers")
@@ -94,14 +95,15 @@ def create_app(db_path=None) -> FastAPI:
     @app.get("/api/alerts")
     def list_alerts(server: str | None = None):
         q = "SELECT id, server_id, kind, params, label, active, created_at, last_fired FROM alert_rules"
-        rows = con.execute(q + (" WHERE server_id=?" if server else ""), (server,) if server else ()).fetchall()
+        with lock:
+            rows = con.execute(q + (" WHERE server_id=?" if server else ""), (server,) if server else ()).fetchall()
         return [{**dict(r), "params": json.loads(r["params"])} for r in rows]
 
     @app.post("/api/alerts", status_code=201)
     def create_alert(rule: RuleIn):
         if rule.kind not in alerts.KINDS:
             raise HTTPException(422, "Tipo de alerta desconocido")
-        if not WEBHOOK_RE.match(rule.webhook_url):
+        if not WEBHOOK_RE.fullmatch(rule.webhook_url):
             raise HTTPException(422, "Solo se aceptan webhooks de Discord (https://discord.com/api/webhooks/…)")
         _server_or_404(rule.server_id)
         with lock:
@@ -120,7 +122,7 @@ def create_app(db_path=None) -> FastAPI:
     @app.post("/api/alerts/test")
     def test_alert(body: dict):
         url = str(body.get("webhook_url", ""))
-        if not WEBHOOK_RE.match(url):
+        if not WEBHOOK_RE.fullmatch(url):
             raise HTTPException(422, "Webhook de Discord no válido")
         ok = alerts.discord_sender(url, alerts._embed("Atalaya conectado ✅",
                                                       ["Las alertas de este canal funcionan."], "Atalaya"))

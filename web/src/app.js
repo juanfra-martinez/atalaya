@@ -14,16 +14,16 @@
         <div class="brand">${A.logo()}<div><b>Atalaya</b><small>Travian Legends</small></div></div>
         <div><div class="nav-label">${t("nav.world")}</div><nav class="nav" id="nav">${NAV.map(([k, ic]) => `<a href="#${k}" data-k="${k}">${A.icon(ic)}<span>${t("nav." + k)}</span>${k === "watch" ? `<span class="count" id="nav-watch"></span>` : k === "inactives" ? `<span class="count" id="nav-inact"></span>` : ""}</a>`).join("")}</nav></div>
         <div><div class="nav-label">${t("nav.global")}</div><nav class="nav"><a href="#servers" data-k="servers">${A.icon("servers")}<span>${t("nav.servers")}</span><span class="count" id="nav-servers"></span></a></nav></div>
-        <div class="side-foot"><span class="dot"></span>${A.DEMO ? t("foot.demo") : t("foot.live")}<br><span id="foot-upd"></span><br><span style="font-size:11px">${t("foot.disclaimer")} <a href="#privacy">${t("foot.privacy")}</a></span></div>
+        <div class="side-foot"><span class="dot"></span>${A.DEMO ? t("foot.demo") : t("foot.live")}<br><span id="foot-upd"></span><br><span style="font-size:11px">${t("foot.disclaimer")} <a href="#privacy">${t("foot.privacy")}</a></span><div class="seg lang side-lang" role="group" aria-label="${A.esc(t("nav.lang"))}"><button data-l="es" aria-pressed="${A.lang === "es"}">ES</button><button data-l="en" aria-pressed="${A.lang === "en"}">EN</button></div></div>
       </aside>
       <div class="side-scrim" id="side-scrim"></div>
       <div class="main">
         <header class="top">
-          <button class="icon-btn menu-btn" id="menu" aria-label="${A.esc(t("nav.menu"))}">${A.icon("menu")}</button>
+          <button class="icon-btn menu-btn" id="menu" aria-label="${A.esc(t("nav.menu"))}" aria-expanded="false" aria-controls="side">${A.icon("menu")}</button>
           <button class="world-pick" id="wp" title="${A.esc(t("nav.switchWorld"))}"><span class="badge-speed" id="wp-s">×1</span><span style="min-width:0"><b id="wp-n">—</b><span id="wp-h"></span></span></button>
-          <button class="search-btn" id="sb">${A.icon("search").replace("<svg", '<svg width="16" height="16"')}<span>${t("pal.ph")}</span><kbd>Ctrl K</kbd></button>
+          <button class="search-btn" id="sb">${A.icon("search").replace("<svg", '<svg width="16" height="16"')}<span>${t("pal.ph")}</span><kbd>${/Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌘ K" : "Ctrl K"}</kbd></button>
           <div class="top-actions">
-            <div class="seg lang" id="lang"><button data-l="es" aria-pressed="${A.lang === "es"}">ES</button><button data-l="en" aria-pressed="${A.lang === "en"}">EN</button></div>
+            <div class="seg lang" id="lang" role="group" aria-label="${A.esc(t("nav.lang"))}"><button data-l="es" aria-pressed="${A.lang === "es"}">ES</button><button data-l="en" aria-pressed="${A.lang === "en"}">EN</button></div>
             ${A.sync?.enabled ? `<button class="icon-btn acct" id="acct"></button>` : ""}
             <button class="icon-btn" id="theme" aria-label="${A.esc(t("nav.theme"))}"></button>
           </div>
@@ -31,15 +31,16 @@
         <main class="view" id="view"><div class="view-inner" id="vi"></div></main>
       </div></div>`;
     A.$("#menu").onclick = () => { const o = A.$("#side").classList.toggle("open"); A.$("#menu").setAttribute("aria-expanded", o); };
-    A.$("#side-scrim").onclick = () => A.$("#side").classList.remove("open");
+    A.$("#side-scrim").onclick = () => A.closeSide();
     A.$("#wp").onclick = () => (location.hash = "servers");
     A.$("#sb").onclick = () => A.palette();
-    A.$("#lang").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; A.setLang(b.dataset.l); A.shell(); A.updateTop(); A.route(); };
+    A.$$(".seg.lang").forEach((g) => (g.onclick = (e) => { const b = e.target.closest("button"); if (!b) return; A.setLang(b.dataset.l); A.shell(); A.updateTop(); A.route(); }));
     A.$("#theme").onclick = () => { const cur = A.theme(); A.setTheme(cur === "dark" ? "light" : "dark"); };
     A.paintThemeBtn();
     A.updateServerCount();
     if (A.$("#acct")) { A.$("#acct").onclick = () => A.sync.open(); A.sync.paint(); }
   };
+  A.closeSide = () => { A.$("#side")?.classList.remove("open"); A.$("#menu")?.setAttribute("aria-expanded", "false"); };
   A.updateServerCount = () => { const el = A.$("#nav-servers"); if (el) el.textContent = A.state.servers.filter((s) => s.status === "active").length || ""; };
   A.theme = () => document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   A.setTheme = (th) => { document.documentElement.dataset.theme = th; A.store.set("theme", th); A.paintThemeBtn(); A.route(); };
@@ -72,7 +73,7 @@
     const k = (location.hash || "#" + START).slice(1).split("?")[0]; // lo que sigue a ? son datos de la vista
     const view = A.views[k] ? k : START;
     A.$$("#side .nav a").forEach((a) => (a.dataset.k === view ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-    A.$("#side").classList.remove("open");
+    A.closeSide();
     cleanup?.(); cleanup = null;
     const vi = A.$("#vi");
     vi.onclick = null;
@@ -104,13 +105,13 @@
         <div class="meta">${A.ui.tribe(p.tid)} ${A.ui.ally(p.aid)} ${A.ui.pill(p.status)} <span class="chip mono">uid ${p.uid}</span></div></div>
         <button class="icon-btn" data-close aria-label="${A.esc(t("common.close"))}">${A.icon("x")}</button></div>
       <div class="drawer-b">
-        <div class="stat-row"><div><b>${A.fmt(p.pop)}</b><span>${t("common.pop")}</span></div><div><b>${p.villages}</b><span>${t("common.villages")}</span></div><div><b class="${A.cls(p.d7)}">${A.signed(p.d7)}</b><span>${t("dash.d7")}</span></div><div><b>${p.growth > 0 ? "+" : ""}${A.fmt(p.growth, 0)}</b><span>${t("pl.perDay")}</span></div></div>
+        <div class="stat-row"><div><b>${A.fmt(p.pop)}</b><span>${t("common.pop")}</span></div><div><b>${A.fmt(p.villages)}</b><span>${t("common.villages")}</span></div><div><b class="${A.cls(p.d7)}">${A.signed(p.d7)}</b><span>${t("dash.d7")}</span></div><div><b>${A.signed(Math.round(p.growth))}</b><span>${t("pl.perDay")}</span></div></div>
         ${p.status !== "natar" ? `<div class="explain"><b>${t("pl.inactTitle", { c: p.confidence })}</b><ul>${A.reasons(p).map((r) => `<li>${A.esc(r)}</li>`).join("")}</ul></div>` : ""}
         <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="pl-watch">${A.icon("star")}${A.isWatched("player", p.uid) ? t("common.unwatch") : t("common.watch")}</button>
           <button class="btn sm" id="pl-alert">${A.icon("bell")}${t("pl.alert")}</button><button class="btn sm" id="pl-map">${A.icon("map")}${t("pl.onMap")}</button>
           <button class="btn sm" id="pl-copy">${A.icon("copy")}${t("pl.copyAll")}</button>${A.ui.game("player", p.uid, null, t("game.profile")).replace("btn ghost sm", "btn sm")}</div>
         <div><h3>${t("pl.history")}</h3><div id="pl-chart"></div></div>
-        <div><h3>${t("pl.villages", { n: vs.length })}</h3><div class="table-wrap"><table class="t"><thead><tr><th>${t("inact.village")}</th><th></th><th class="r">${t("common.pop")}</th><th class="r">1d</th><th class="r">3d</th>${h ? `<th class="r">${t("inact.dist")}</th>` : ""}</tr></thead><tbody>
+        <div><h3>${t("pl.villages", { n: vs.length })}</h3><div class="table-wrap"><table class="t"><thead><tr><th>${t("inact.village")}</th><th></th><th class="r">${t("common.pop")}</th><th class="r">${t("rk.d1")}</th><th class="r">${t("inact.d3")}</th>${h ? `<th class="r">${t("inact.dist")}</th>` : ""}</tr></thead><tbody>
           ${vs.map((v) => `<tr class="${v.vid === +vid ? "sel" : ""}"><td>${A.ui.coord(v.x, v.y)}${A.ui.game("tile", v.x, v.y)}</td><td>${v.capital ? `<span class="chip">${t("pl.capital")}</span> ` : ""}${A.esc(v.name)}</td><td class="r">${A.fmt(v.pop)}</td><td class="r">${A.ui.delta(v.d1)}</td><td class="r">${A.ui.delta(v.d3)}</td>${h ? `<td class="r">${A.fmt(A.dist(h.x, h.y, v.x, v.y, w.R), 1)}</td>` : ""}</tr>`).join("")}</tbody></table></div></div>
         <div><h3>${t("pl.events")}</h3><div class="feed card">${A.eventRows(ev, { compact: true })}</div></div>
       </div>`);
@@ -150,8 +151,8 @@
   /* ---------- paleta de comandos ---------- */
   A.palette = () => {
     const w = A.state.world;
-    const m = A.modal("", `<input id="pal-q" placeholder="${A.esc(t("pal.ph"))}" aria-label="${A.esc(t("pal.ph"))}" autocomplete="off"><div class="palette-list" id="pal-l" role="listbox"></div><div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t("pal.nav")}</span><span><kbd>Enter</kbd> ${t("pal.open")}</span><span><kbd>Esc</kbd> ${t("common.close")}</span></div>`);
-    m.classList.add("palette"); m.querySelector(".modal-h").remove(); m.querySelector(".modal-b").style.cssText = "padding:0;gap:0";
+    const m = A.modal("", `<input id="pal-q" placeholder="${A.esc(t("pal.ph"))}" aria-label="${A.esc(t("pal.ph"))}" autocomplete="off"><div class="palette-list" id="pal-l" role="listbox"></div><div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t("pal.nav")}</span><span><kbd>${t("key.enter")}</kbd> ${t("pal.open")}</span><span><kbd>Esc</kbd> ${t("common.close")}</span></div>`);
+    m.classList.add("palette"); m.setAttribute("aria-label", t("pal.ph")); m.querySelector(".modal-h").remove(); m.querySelector(".modal-b").style.cssText = "padding:0;gap:0";
     const q = m.querySelector("#pal-q"), L = m.querySelector("#pal-l");
     let items = [], sel = 0;
     const pages = NAV.concat([["servers", "servers"]]).map(([k, ic]) => ({ k: t("pal.page"), label: t("nav." + k), icon: ic, run: () => (location.hash = k) }));
@@ -167,7 +168,7 @@
         w.players.filter((p) => p.name.toLowerCase().includes(s)).slice(0, 7).forEach((p) => items.push({ k: t("common.player"), label: p.name, right: `${A.fmt(p.pop)} · ${p.tag || "—"}`, icon: "user", run: () => A.openPlayer(p.uid) }));
         w.alliances.filter((a) => a.tag.toLowerCase().includes(s)).slice(0, 4).forEach((a) => items.push({ k: t("common.alliance"), label: a.tag, right: `${a.members} · ${A.compact(a.pop)}`, icon: "shield", run: () => A.openAlliance(a.aid) }));
         let vn = 0; for (const v of w.villages) { if (vn >= 4) break; if (v.name.toLowerCase().includes(s) && v.name.length > 3) { vn++; items.push({ k: t("inact.village"), label: v.name, right: A.coord(v.x, v.y), icon: "pin", run: () => A.openPlayer(v.uid, v.vid) }); } }
-        A.state.servers.filter((x) => (x.name + x.id).toLowerCase().includes(s)).slice(0, 3).forEach((x) => items.push({ k: t("pal.world"), label: x.name, right: x.id, icon: "servers", run: async () => { await A.selectWorld(x.id); location.hash = "dashboard"; A.route(); } }));
+        A.state.servers.filter((x) => (x.name + x.id).toLowerCase().includes(s)).slice(0, 3).forEach((x) => items.push({ k: t("pal.world"), label: x.name, right: x.id, icon: "servers", run: async () => { if (!(await A.selectWorld(x.id))) return; if (location.hash === "#dashboard") A.route(); else location.hash = "dashboard"; } }));
       }
       items.push(...pages.filter((p) => !s || p.label.toLowerCase().includes(s)));
       sel = Math.min(sel, items.length - 1);
@@ -195,12 +196,12 @@
   });
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); A.palette(); }
-    else if (e.key === "Escape") { A.closeOverlays(); A.$("#side")?.classList.remove("open"); }
+    else if (e.key === "Escape") { A.closeOverlays(); A.closeSide(); }
     else if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); A.palette(); }
-    else if (e.key === "Enter" && document.activeElement?.matches("[data-player],[data-ally]")) document.activeElement.click();
+    else if ((e.key === "Enter" || e.key === " ") && document.activeElement?.matches("[data-player],[data-ally]")) { e.preventDefault(); document.activeElement.click(); }
   });
   window.addEventListener("hashchange", () => A.route());
-  let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (/dashboard|events/.test(location.hash || "#dashboard")) A.route(); }, 250); });
+  let rz, rw = innerWidth; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (innerWidth === rw) return; rw = innerWidth; if (/dashboard|events/.test(location.hash || "#dashboard")) A.route(); }, 250); });
 
   /* ---------- arranque ---------- */
   A.boot = async () => {

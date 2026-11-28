@@ -76,8 +76,9 @@
     empty: (title, body = "") => `<div class="empty"><b>${A.esc(title)}</b>${A.esc(body)}</div>`,
     sortable(table, rows, cols, state, render) {
       // cols: [{k, label, cls, sort:(row)=>value}]
-      const head = cols.map((c) => `<th class="${c.sort ? "sortable" : ""} ${c.cls || ""}" data-k="${c.k}" ${state.sort === c.k ? `aria-sort="${state.dir > 0 ? "ascending" : "descending"}"` : ""}>${c.label}</th>`).join("");
+      const head = cols.map((c) => `<th class="${c.sort ? "sortable" : ""} ${c.cls || ""}" data-k="${c.k}" ${c.sort ? 'tabindex="0"' : ""} ${state.sort === c.k ? `aria-sort="${state.dir > 0 ? "ascending" : "descending"}"` : ""}>${c.label}</th>`).join("");
       table.querySelector("thead").innerHTML = `<tr>${head}</tr>`;
+      table.querySelector("thead").onkeydown = (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("th.sortable")) { e.preventDefault(); e.target.click(); } };
       table.querySelector("thead").onclick = (e) => {
         const th = e.target.closest("th.sortable"); if (!th) return;
         const k = th.dataset.k;

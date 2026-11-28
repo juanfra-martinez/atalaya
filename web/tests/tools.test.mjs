@@ -33,8 +33,23 @@ test("las estadísticas cubren las siete tribus jugables y cuadran con A.UNITS y
   assert.deepEqual(A.STATS[6][0].slice(0, 7), [10, 30, 20, 45, 60, 30, 15]); // infante esclavo
 });
 
+test("los nombres de las tropas son los del juego en español y en inglés", () => {
+  // Copiados de /js/es-ES/truppen.json y /js/en-US/truppen.json (International 7, versión 718.7, 27 nov 2026).
+  const es = (tid) => A.UNITS[tid].map((u) => u[0]), en = (tid) => A.UNITS[tid].map((u) => u[1]);
+  assert.deepEqual(es(6), ["Infante esclavo", "Guardia Ash", "Guerreros de Khopes", "Explorador Sopdu", "Guarda Osiris", "Carro de Reshef", "Ariete", "Catapulta de piedra", "Visir", "Colono"]);
+  assert.deepEqual(en(6), ["Slave Militia", "Ash Warden", "Khopesh Warrior", "Sopdu Explorer", "Anhur Guard", "Resheph Chariot", "Ram", "Stone Catapult", "Nomarch", "Settler"]);
+  assert.deepEqual(es(1).slice(6, 8), ["Ariete", "Catapulta de fuego"]);
+  assert.deepEqual(es(2).slice(5, 7), ["Jinete Teutón", "Ariete de madera"]);
+  assert.deepEqual(es(3).slice(6, 8), ["Ariete de madera", "Catapulta de guerra"]);
+  assert.equal(es(7)[4], "Jinete certero");
+  assert.deepEqual(es(8).slice(3, 6), ["Terión de doble hoja", "Jinete elpida", "Hippei corintio"]);
+  assert.equal(es(9)[0], "Esclavo");
+  A.lang = "en"; assert.equal(A.unitName(3, 3), "Theutates Thunder");
+  A.lang = "es"; assert.equal(A.unitName(3, 3), "Rayo de Teutates");
+});
+
 test("armyTotals separa infantería y caballería y suma coste, consumo, carga y formación", () => {
-  const r = A.armyTotals(6, [10, 2, 0, 0, 5]); // 10 esclavos, 2 guardianes de ceniza, 5 guardias de Anhur
+  const r = A.armyTotals(6, [10, 2, 0, 0, 5]); // 10 infantes esclavos, 2 guardias Ash, 5 guardas Osiris
   assert.equal(r.n, 17);
   assert.equal(r.attInf, 10 * 10 + 2 * 30);
   assert.equal(r.attCav, 5 * 50);
@@ -45,7 +60,7 @@ test("armyTotals separa infantería y caballería y suma coste, consumo, carga y
   assert.equal(r.upkeep, 10 + 2 + 10);
   assert.equal(r.carry, 10 * 15 + 2 * 50 + 5 * 50);
   assert.equal(r.train, 10 * 530 + 2 * 1380 + 5 * 2560);
-  assert.equal(r.slowest, 1); // el guardián de ceniza va a 6 casillas/hora
+  assert.equal(r.slowest, 1); // la guardia Ash va a 6 casillas/hora
   assert.equal(A.armyTotals(4, [1]), null); // la naturaleza no es una tribu jugable
   assert.equal(A.armyTotals(1, []).n, 0);
 });
@@ -232,7 +247,7 @@ test("planOps calcula la salida de cada oleada para una llegada común", () => {
   assert.equal(Math.round(plan[2].sec), Math.round((20 / 3 + 30 / 9) * 3600));
   assert.equal(plan[3].ok, false);
   assert.equal(plan[4].tid, 7);
-  assert.equal(plan[4].unit, 9); // índice fuera de rango, acotado
+  assert.equal(plan[4].unit, 8); // índice fuera de rango, acotado a lo que ofrece el selector (sin colono)
   const s = A.opsSummary(plan, land - 61000e3);
   assert.deepEqual([s.n, s.ok, s.real, s.fake, s.targets, s.origins, s.late], [5, 4, 3, 1, 2, 3, 0]);
   assert.equal(s.first, plan[0].send);

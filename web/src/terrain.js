@@ -141,5 +141,5 @@
     const fill = carried != null && cap ? Math.min(100, (carried / cap) * 100) : null;
     return { icon, at, carried, cap, text, fill, losses: icon === 2 || icon === 3, lost: icon === 3 };
   };
-  A.bonusLabel = (b) => ["r1", "r2", "r3", "r4"].map((k, i) => (b[i] ? `${b[i]}% ${A.t("land." + k)}` : "")).filter(Boolean).join(" + ");
+  A.bonusLabel = (b) => ["r1", "r2", "r3", "r4"].map((k, i) => (b[i] ? `${A.fmt(b[i])} % ${A.t("land." + k)}` : "")).filter(Boolean).join(" + ");
 })();

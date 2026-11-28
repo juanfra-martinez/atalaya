@@ -156,7 +156,7 @@
       if (!parsed) { A.toast(t("land.bad")); return; }
       land = A.landMerge(land, parsed);
       A.store.set(landKey(), land);
-      if (!A.land()) { A.toast(t("land.full")); }
+      if (A.store.get(landKey(), null)?.at !== land.at) { A.toast(t("land.full")); render(); return; }
       A.toast(t(parsed.parts > 1 ? "land.addedMany" : "land.added", { f: parsed.free.length, o: parsed.oases.length, n: parsed.parts, c: parsed.covered.length }));
       $("#ld-ta").value = "";
       render();
@@ -205,7 +205,7 @@
         <div class="sep"></div>
         <h3>${t("army.compare")}</h3>
         <div class="table-wrap"><table class="t" id="ar-t"><thead></thead><tbody></tbody></table></div>
-        <div class="muted" style="font-size:12.5px">${t("army.note", { speed: w.server.speed, troop: A.troopSpeed(w.server.speed) })}</div>
+        <div class="muted" style="font-size:12.5px">${t("army.note", { speed: w.server.speed || 1, troop: A.troopSpeed(w.server.speed || 1) })}</div>
       </div>`;
     const $ = (s) => A.$(s, card);
     const save = () => A.store.set(key, { tid: st.tid, counts: st.counts, res: st.res, unit: st.unit, npc: st.npc });
@@ -237,7 +237,7 @@
         { k: "attPerK", label: t("army.attPerK"), cls: "r", sort: (r) => r.attPerK }, { k: "defPerK", label: t("army.defPerK"), cls: "r", sort: (r) => r.defPerK }, { k: "train", label: t("army.trainCol"), cls: "r", sort: (r) => r.train }];
       const table = $("#ar-t");
       A.ui.sortable(table, rows, cols, st, compare);
-      const best = (k) => Math.max(...rows.slice(0, 6).map((r) => r[k]));
+      const best = (k) => Math.max(...rows.filter((r) => r.i < 6).map((r) => r[k]));
       const mark = (r, k, d = 0) => `<td class="r num">${r.i < 6 && r[k] === best(k) && r[k] > 0 ? `<b class="up">${A.fmt(r[k], d)}</b>` : A.fmt(r[k], d)}</td>`;
       table.querySelector("tbody").innerHTML = rows.map((r) => `<tr><td>${A.esc(A.unitName(st.tid, r.i))}${r.cav ? ` <span class="chip">${t("army.cav")}</span>` : ""}</td>
         <td class="r num">${r.att}</td><td class="r num">${r.defInf}</td><td class="r num">${r.defCav}</td><td class="r num">${A.fmt(r.total)}</td><td class="r num">${r.upkeep}</td><td class="r num">${r.speed * troop}</td><td class="r num">${r.carry ?? "—"}</td>

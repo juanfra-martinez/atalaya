@@ -25,7 +25,7 @@ KINDS = {
 
 Sender = Callable[[str, dict], bool]
 
-WEBHOOK_RE = re.compile(r"^https://(?:discord(?:app)?\.com)/api/webhooks/\d+/[\w-]+$")
+WEBHOOK_RE = re.compile(r"https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+")
 
 # Webhooks que llegan por variable de entorno (ATALAYA_ALERT_RULES). En la base solo se guarda
 # una referencia "env:<hash>", porque en la versión sin servidor la base se publica.
@@ -45,7 +45,7 @@ def sync_env_rules(con: sqlite3.Connection, raw: str) -> dict:
     wanted: dict[tuple, dict] = {}
     for r in rules:
         url = str(r.get("webhook_url", ""))
-        if r.get("kind") not in KINDS or not WEBHOOK_RE.match(url) or not r.get("server_id"):
+        if r.get("kind") not in KINDS or not WEBHOOK_RE.fullmatch(url) or not r.get("server_id"):
             log.warning("regla de alerta ignorada: %s", {k: v for k, v in r.items() if k != "webhook_url"})
             continue
         ref = _ref(url)
@@ -78,12 +78,12 @@ def redact_webhooks(con: sqlite3.Connection) -> None:
 def discord_sender(url: str, payload: dict) -> bool:
     if url.startswith("env:"):
         url = ENV_WEBHOOKS.get(url, "")
-    if not WEBHOOK_RE.match(url):
+    if not WEBHOOK_RE.fullmatch(url):
         return False
     try:
         r = httpx.post(url, json=payload, timeout=15)
         return r.status_code < 300
-    except httpx.HTTPError:
+    except (httpx.HTTPError, httpx.InvalidURL):
         return False
 
 
@@ -116,48 +116,58 @@ def evaluate(con: sqlite3.Connection, server: str, day: str, sender: Sender = di
     tags = {r[0]: r[1] for r in con.execute("SELECT aid, tag FROM alliances WHERE server_id=?", (server,))}
     fired = []
     for rule in rules:
-        p = json.loads(rule["params"])
-        kind = rule["kind"]
-        lines: list[str] = []
-        title = rule["label"] or KINDS.get(kind, kind)
-        if kind == "player_inactive":
-            uid = int(p["uid"])
-            hist = [(r[0], r[1], r[2]) for r in con.execute(
-                "SELECT day, pop, villages FROM player_days WHERE server_id=? AND uid=? ORDER BY day DESC LIMIT 30",
-                (server, uid))][::-1]
-            fs = con.execute("SELECT first_seen FROM players WHERE server_id=? AND uid=?", (server, uid)).fetchone()
-            m = player_inactivity(hist, fs[0] if fs else "", speed)
-            if m["streak"] >= int(p.get("min_days", 3)):
-                if not rule["last_fired"]:
-                    lines.append(f"**{names.get(uid, uid)}** lleva {m['streak']} días sin crecer "
-                                 f"(confianza {m['confidence']} %).")
-            elif rule["last_fired"]:
-                con.execute("UPDATE alert_rules SET last_fired=NULL WHERE id=?", (rule["id"],))
-        elif kind in ("area_conquest", "area_new_village"):
-            types = {"area_conquest": ("conquered", "destroyed"), "area_new_village": ("founded",)}[kind]
-            for e in events:
-                if e["type"] in types and e["x"] is not None:
-                    d = distance(int(p["x"]), int(p["y"]), e["x"], e["y"], radius, wrap)
-                    if d <= float(p.get("radius", 15)):
-                        who = names.get(e["uid"], e["uid"])
-                        verb = {"conquered": "conquistada por", "destroyed": "destruida (era de)",
-                                "founded": "fundada por"}[e["type"]]
-                        lines.append(f"({e['x']}|{e['y']}) {verb} **{who}** · {d:.1f} casillas")
-        elif kind == "player_alliance_change":
-            uid = int(p["uid"])
-            for e in events:
-                if e["uid"] == uid and e["type"].startswith("alliance_"):
-                    lines.append(f"**{names.get(uid, uid)}**: {tags.get(e['aid_prev'], '—')} → {tags.get(e['aid'], '—')}")
-        elif kind == "alliance_village_lost":
-            aid = int(p["aid"])
-            for e in events:
-                if (e["type"] == "conquered" and e["aid_prev"] == aid) or (e["type"] == "destroyed" and e["aid"] == aid):
-                    lines.append(f"({e['x']}|{e['y']}) {e['type']} · {names.get(e['uid'], e['uid'])}")
-        if lines:
-            ok = sender(rule["webhook_url"], _embed(title, lines, server))
-            con.execute("UPDATE alert_rules SET last_fired=? WHERE id=?", (day, rule["id"]))
-            con.execute("INSERT INTO alert_log(rule_id, day, message, ok) VALUES (?,?,?,?)",
-                        (rule["id"], day, "\n".join(lines), 1 if ok else 0))
-            fired.append({"rule": rule["id"], "kind": kind, "lines": lines, "ok": ok})
+        try:
+            fired += _evaluate_rule(con, rule, server, day, events, names, tags, radius, wrap, speed, sender)
+        except (KeyError, TypeError, ValueError):
+            log.warning("regla %s: parámetros no válidos (%s)", rule["id"], rule["params"])
     con.commit()
+    return fired
+
+
+def _evaluate_rule(con, rule, server, day, events, names, tags, radius, wrap, speed, sender) -> list[dict]:
+    fired: list[dict] = []
+    p = json.loads(rule["params"])
+    kind = rule["kind"]
+    lines: list[str] = []
+    title = rule["label"] or KINDS.get(kind, kind)
+    if kind == "player_inactive":
+        uid = int(p["uid"])
+        hist = [(r[0], r[1], r[2]) for r in con.execute(
+            "SELECT day, pop, villages FROM player_days WHERE server_id=? AND uid=? ORDER BY day DESC LIMIT 30",
+            (server, uid))][::-1]
+        fs = con.execute("SELECT first_seen FROM players WHERE server_id=? AND uid=?", (server, uid)).fetchone()
+        m = player_inactivity(hist, fs[0] if fs else "", speed)
+        if m["streak"] >= int(p.get("min_days", 3)):
+            if not rule["last_fired"]:
+                lines.append(f"**{names.get(uid, uid)}** lleva {m['streak']} días sin crecer "
+                             f"(confianza {m['confidence']} %).")
+        elif rule["last_fired"]:
+            con.execute("UPDATE alert_rules SET last_fired=NULL WHERE id=?", (rule["id"],))
+    elif kind in ("area_conquest", "area_new_village"):
+        types = {"area_conquest": ("conquered", "destroyed"), "area_new_village": ("founded",)}[kind]
+        for e in events:
+            if e["type"] in types and e["x"] is not None:
+                d = distance(int(p["x"]), int(p["y"]), e["x"], e["y"], radius, wrap)
+                if d <= float(p.get("radius", 15)):
+                    who = names.get(e["uid"], e["uid"])
+                    verb = {"conquered": "conquistada por", "destroyed": "destruida (era de)",
+                            "founded": "fundada por"}[e["type"]]
+                    lines.append(f"({e['x']}|{e['y']}) {verb} **{who}** · {d:.1f} casillas")
+    elif kind == "player_alliance_change":
+        uid = int(p["uid"])
+        for e in events:
+            if e["uid"] == uid and e["type"].startswith("alliance_"):
+                lines.append(f"**{names.get(uid, uid)}**: {tags.get(e['aid_prev'], '—')} → {tags.get(e['aid'], '—')}")
+    elif kind == "alliance_village_lost":
+        aid = int(p["aid"])
+        for e in events:
+            if (e["type"] == "conquered" and e["aid_prev"] == aid) or (e["type"] == "destroyed" and e["aid"] == aid):
+                verb = "conquistada por" if e["type"] == "conquered" else "destruida (era de)"
+                lines.append(f"({e['x']}|{e['y']}) {verb} **{names.get(e['uid'], e['uid'])}**")
+    if lines:
+        ok = sender(rule["webhook_url"], _embed(title, lines, server))
+        con.execute("UPDATE alert_rules SET last_fired=? WHERE id=?", (day, rule["id"]))
+        con.execute("INSERT INTO alert_log(rule_id, day, message, ok) VALUES (?,?,?,?)",
+                    (rule["id"], day, "\n".join(lines), 1 if ok else 0))
+        fired.append({"rule": rule["id"], "kind": kind, "lines": lines, "ok": ok})
     return fired

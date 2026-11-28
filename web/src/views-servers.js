@@ -10,8 +10,11 @@
   const pillOf = (s) => (s.status === "active" ? "active" : s.status === "upcoming" ? "new" : "gone");
   const statusPill = (s) => `<span class="pill ${pillOf(s)}">${t("srv.st." + s.status, {}, s.status)}</span>`;
   const regionName = (r) => A.esc(t("region." + r, {}, r));
+  const worldsN = (n) => t(n === 1 ? "srv.count1" : "srv.count", { n: A.fmt(n) });
+  /* Por qué un mundo no tiene datos: los próximos se descargan al abrir; los terminados, ya nunca. */
+  const noData = (s) => t(s?.status === "ended" ? "srv.noDataEnded" : s?.status === "upcoming" ? "srv.noDataUpcoming" : "srv.noData");
   const openWorld = async (s) => {
-    if (!A.hasData(s)) { A.toast(t("srv.noData")); return; }
+    if (!A.hasData(s)) { A.toast(noData(s)); return; }
     A.closeOverlays();
     if (await A.selectWorld(s.id)) location.hash = "dashboard";
   };
@@ -37,7 +40,7 @@
       <div class="drawer-b">
         <div class="row" style="flex-wrap:wrap">${data ? `<button class="btn primary sm" id="ws-open">${A.icon("dashboard")}${t("srv.open")}</button>` : ""}${site}</div>
         ${data ? `<div class="stat-row">${stat(A.compact(s.players), t("common.players"))}${stat(A.compact(s.villages), t("common.villages"))}${stat(A.fmt(s.alliances), t("common.alliances"))}${stat(A.compact(s.population), t("srv.s.population"))}</div>
-        <div class="stat-row">${stat(A.signed(m.d7.players), t("srv.t.d7"), A.cls(m.d7.players))}${stat(A.fmt(m.popPerPlayer), t("srv.t.popPer"))}${stat(A.fmt(m.villagesPerPlayer, 1), t("srv.t.vilPer"))}${stat(A.fmt(m.conquered7), t("srv.t.conq7"))}</div>` : `<div class="explain">${A.esc(s.status === "upcoming" ? t("srv.st.upcoming") + ": " + startsIn(s) : t("srv.noData"))}</div>`}
+        <div class="stat-row">${stat(A.signed(m.d7.players), t("srv.t.d7"), A.cls(m.d7.players))}${stat(A.fmt(m.popPerPlayer), t("srv.t.popPer"))}${stat(A.fmt(m.villagesPerPlayer, 1), t("srv.t.vilPer"))}${stat(A.fmt(m.conquered7), t("srv.t.conq7"))}</div>` : `<div class="explain">${A.esc(s.status === "upcoming" ? t("srv.st.upcoming") + ": " + startsIn(s) : noData(s))}</div>`}
         ${data && !hasTrend ? `<div class="explain">${t("srv.noHistory")}</div>` : ""}
         ${s.info ? `<div><h3>${t("cal.title")}</h3>${A.calendarHtml(s)}</div>` : ""}
         ${hasTrend ? `<div><h3>${t("common.players")}</h3><div id="ws-players"></div></div><div><h3>${t("common.villages")}</h3><div id="ws-villages"></div></div><div><h3>${t("srv.s.population")}</h3><div id="ws-pop"></div></div>
@@ -88,7 +91,7 @@
         `${seg("srv-view", t("srv.viewAs"), [["table", t("srv.v.table")], ["cards", t("srv.v.cards")]], st.view)}<button class="btn" id="srv-csv">${A.icon("download")}${t("srv.csv")}</button>`) +
         `<section class="srv-bar card" aria-label="${A.esc(t("srv.filters"))}">
           <input class="input srv-q" id="srv-q" type="search" placeholder="${A.esc(t("srv.search"))}" aria-label="${A.esc(t("srv.search"))}" value="${A.esc(st.q)}">
-          <select class="input" id="srv-region" aria-label="${A.esc(t("srv.allRegions"))}"><option value="">${t("srv.allRegions")}</option>${regions.map((r) => `<option value="${A.esc(r)}" ${st.region === r ? "selected" : ""}>${regionName(r)}</option>`).join("")}</select>
+          <select class="input" id="srv-region" aria-label="${A.esc(t("srv.t.region"))}"><option value="">${t("srv.allRegions")}</option>${regions.map((r) => `<option value="${A.esc(r)}" ${st.region === r ? "selected" : ""}>${regionName(r)}</option>`).join("")}</select>
           ${seg("srv-status", t("common.status"), [...statuses.map((k) => [k, `${t("srv.st.plural." + k)} ${nOf(k)}`]), ["all", t("common.all")]], st.status)}
           ${seg("srv-speed", t("srv.speedFilter"), [["", t("common.all")], ...speeds.map((s) => [String(s), "×" + s])], st.speed)}
           <div class="srv-sort"><select class="input" id="srv-sort" aria-label="${A.esc(t("srv.sort"))}">${SORTS.map((k) => `<option value="${k}" ${st.sort === k ? "selected" : ""}>${t("srv.s." + k)}</option>`).join("")}</select>
@@ -133,7 +136,7 @@
 
     const bars = (host, groups, attr, cur, label) => {
       const max = Math.max(1, ...groups.map((g) => g.players));
-      host.innerHTML = groups.map((g) => `<button class="srv-rb" ${attr}="${A.esc(g.key)}" aria-pressed="${String(g.key) === cur}"><span class="n" title="${A.esc(t("srv.count", { n: g.worlds }))}">${label(g.key)}<small>${A.fmt(g.worlds)}</small></span><span class="b"><i style="width:${(g.players / max) * 100}%"></i></span><span class="v">${A.esc(A.compact(g.players))}</span></button>`).join("");
+      host.innerHTML = groups.map((g) => `<button class="srv-rb" ${attr}="${A.esc(g.key)}" aria-pressed="${String(g.key) === cur}"><span class="n" title="${A.esc(worldsN(g.worlds))}">${label(g.key)}<small>${A.fmt(g.worlds)}</small></span><span class="b"><i style="width:${(g.players / max) * 100}%"></i></span><span class="v">${A.esc(A.compact(g.players))}</span></button>`).join("");
     };
 
     const highlightValue = (h) => {
@@ -164,7 +167,7 @@
       const colors = { founded: "var(--good)", conquered: "var(--bad)", destroyed: "var(--muted)" };
       for (const k of Object.keys(colors)) A.columns(A.$(`#srv-col-${k}`, root), { labels, values: tot.flows[k], name: t("ev.g." + k), color: colors[k], height: 104 });
       A.columns(A.$("#srv-age", root), {
-        labels: A.AGE_BANDS.map(([lo, hi]) => (hi === Infinity ? `>${lo - 1}` : `${lo}–${hi}`)), values: A.ageHistogram(data),
+        labels: A.AGE_BANDS.map(([lo, hi]) => (hi === Infinity ? `>${A.fmt(lo - 1)}` : `${A.fmt(lo)}–${A.fmt(hi)}`)), values: A.ageHistogram(data),
         name: t("srv.c.age"), height: 128, showValues: true, showAllLabels: true,
       });
     };
@@ -187,10 +190,10 @@
 
     const paintUpcoming = () => {
       const box = A.$("#srv-up", root);
-      const list = A.sortWorlds(A.state.servers.filter((s) => s.status === "upcoming" && (!st.region || s.region === st.region) && (!st.speed || String(s.speed) === st.speed)), "start", 1);
+      const list = A.sortWorlds(A.state.servers.filter((s) => s.status === "upcoming" && (!st.q || (s.name + s.id).toLowerCase().includes(st.q)) && (!st.region || s.region === st.region) && (!st.speed || String(s.speed) === st.speed)), "start", 1);
       box.hidden = !list.length || st.status === "upcoming";
       if (box.hidden) return;
-      box.innerHTML = `<div class="card-h"><h2>${t("srv.c.up")}</h2><span class="sub">${A.esc(t("srv.count", { n: list.length }))}</span></div>
+      box.innerHTML = `<div class="card-h"><h2>${t("srv.c.up")}</h2><span class="sub">${A.esc(worldsN(list.length))}</span></div>
         <div class="srv-up-list">${list.map((s) => `<button class="srv-up-i" data-stats="${A.esc(s.id)}"><span class="srv-sp">×${s.speed}</span><span class="n"><b>${A.esc(s.name)}</b><span>${regionName(s.region)}</span></span><span class="when"><b>${A.esc(startsIn(s))}</b><span>${s.start ? A.esc(longDate(s.start)) : ""}</span></span></button>`).join("")}</div>`;
     };
 
@@ -203,12 +206,12 @@
       const trendRow = data && s.trend?.days?.length > 1 ? `<div class="srv-trend">${A.spark(s.trend.players, { color: "var(--info)", w: 120, h: 28 })}<span class="${A.cls(m.d7.players)}">${A.signed(m.d7.players)}</span><span class="muted">${t("srv.k.in7")}</span></div>` : "";
       return `<article class="card srv ${s.id === A.state.sid ? "current" : ""} ${data ? "" : "nodata"}" data-sid="${A.esc(s.id)}">
           <div class="srv-top"><div class="srv-speed">×${s.speed}<small>${t("srv.speed")}</small></div>
-            <div style="min-width:0;flex:1"><h3><button class="srv-name" ${data ? "" : `title="${A.esc(t("srv.noData"))}"`}>${A.esc(s.name)}</button></h3><div class="host">${A.esc(s.id)}</div></div>
+            <div style="min-width:0;flex:1"><h3><button class="srv-name" ${data ? "" : `title="${A.esc(noData(s))}"`}>${A.esc(s.name)}</button></h3><div class="host">${A.esc(s.id)}</div></div>
             <div class="srv-top-r">${statusPill(s)}${statsBtn(s)}</div></div>
           <div class="srv-stats"><div><b>${num(s.players)}</b><span>${t("common.players")}</span></div><div><b>${num(s.villages)}</b><span>${t("common.villages")}</span></div><div><b>${num(s.alliances)}</b><span>${t("common.alliances")}</span></div></div>
           ${trendRow}
           <div class="srv-age"><span>${ageLabel}</span><span class="track"><i style="width:${A.lifePct(s)}%"></i></span><span>${regionName(s.region)}</span></div>
-          <div class="srv-foot">${data ? `<span>${small("swords")} ${ev.conquered || 0} ${t("ev.short.conquered")}</span><span>${small("sprout")} ${ev.founded || 0} ${t("ev.short.founded")}</span><span class="d">${t("srv.updated", { d: A.dayLabel(s.day) })}</span>` : `<span>${s.status === "upcoming" ? "" : t("srv.pending")}</span>`}</div>
+          <div class="srv-foot">${data ? `<span>${small("swords")} ${A.fmt(ev.conquered || 0)} ${t("ev.short.conquered")}</span><span>${small("sprout")} ${A.fmt(ev.founded || 0)} ${t("ev.short.founded")}</span><span class="d">${t("srv.updated", { d: A.dayLabel(s.day) })}</span>` : `<span>${s.status === "active" ? t("srv.pending") : ""}</span>`}</div>
         </article>`;
     };
 
@@ -233,7 +236,7 @@
       ];
       return `<tr class="${s.id === A.state.sid ? "sel" : ""} ${data ? "" : "nodata"}" data-sid="${A.esc(s.id)}">${cells.map((c, i) => `<td class="${cellCls(COLS[i])}">${c}</td>`).join("")}</tr>`;
     };
-    const table = (list) => `<div class="card srv-tbl"><table class="t"><caption class="sr">${t("srv.list")}</caption><thead><tr>${COLS.map((c) => `<th class="${cellCls(c)}" scope="col" ${c.k && st.sort === c.k ? `aria-sort="${st.dir > 0 ? "ascending" : "descending"}"` : ""}>${c.k ? `<button class="srv-th" data-sort="${c.k}">${t(c.label)}</button>` : c.label ? t(c.label) : `<span class="sr">${t("srv.stats", { n: "" })}</span>`}</th>`).join("")}</tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
+    const table = (list) => `<div class="card srv-tbl"><table class="t"><caption class="sr">${t("srv.list")}</caption><thead><tr>${COLS.map((c) => `<th class="${cellCls(c)}" scope="col" ${c.k && st.sort === c.k ? `aria-sort="${st.dir > 0 ? "ascending" : "descending"}"` : ""}>${c.k ? `<button class="srv-th" data-sort="${c.k}">${t(c.label)}</button>` : c.label ? t(c.label) : `<span class="sr">${t("srv.t.actions")}</span>`}</th>`).join("")}</tr></thead><tbody>${list.map(row).join("")}</tbody></table></div>`;
 
     const paintList = (list) => {
       const box = A.$("#srv-list", root), all = A.state.servers;
@@ -255,7 +258,7 @@
     const list = () => A.sortWorlds(A.state.servers.filter((s) => match(s)), st.sort, st.dir);
     const update = () => {
       const items = list();
-      A.$("#srv-count", root).textContent = t("srv.count", { n: items.length });
+      A.$("#srv-count", root).textContent = worldsN(items.length);
       const active = A.state.servers.filter((s) => s.status === "active"), ready = active.filter(A.hasData).length;
       A.$("#srv-progress", root).textContent = active.length && ready < active.length ? t("srv.progress", { n: ready, total: active.length }) : "";
       const tot = A.worldTotals(items);
@@ -336,7 +339,7 @@
     lastWidth = root.clientWidth;
     observer.observe(root);
     refresh();
-    timer = setInterval(refresh, 20000);
+    timer = setInterval(refresh, A.STATIC ? 300000 : 20000); // la versión publicada cambia como mucho cada hora
     return () => { clearInterval(timer); observer.disconnect(); };
   };
 })();

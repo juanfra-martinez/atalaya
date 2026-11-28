@@ -125,7 +125,7 @@
       A.$("#fm-d", root).value = st.maxDist; A.$("#fm-dv", root).textContent = st.maxDist;
       const have = new Set(st.res.filter((r) => r.v).map((r) => r.v.vid));
       const listed = A.fbListed(); // también lo marcado en el asistente del buscador
-      const rows = A.findTargets({ ...A.filters(), maxDist: st.maxDist }).filter((r) => !have.has(r.v.vid) && !listed.has(A.fbKey(r.v))).slice(0, 30);
+      const rows = A.findTargets({ ...A.filters(), maxDist: st.maxDist, unit: army.unit, ts: army.ts }).filter((r) => !have.has(r.v.vid) && !listed.has(A.fbKey(r.v))).slice(0, 30);
       st.sug = rows;
       A.$("#fm-sug-sub", root).textContent = t("farm.addSub", { d: st.maxDist });
       A.$("#fm-sug-b", root).innerHTML = rows.length ? `<table class="t"><thead><tr><th>${t("inact.village")}</th><th>${t("common.player")}</th><th class="r">${t("common.pop")}</th><th class="r">${t("inact.days")}</th><th>${t("inact.conf")}</th><th class="r">${t("inact.dist")}</th><th class="r">${t("inact.time")}</th><th></th></tr></thead><tbody>
@@ -295,7 +295,7 @@
       ];
       A.ui.sortable(table, rows, cols, st, players);
       table.querySelector("tbody").innerHTML = rows.slice(0, st.limit).map((e) => `<tr>
-          <td class="r"><b class="num">${e.threat.toFixed(1)}</b></td>
+          <td class="r"><b class="num">${A.fmt(e.threat, 1)}</b></td>
           <td>${A.ui.tribe(e.p.tid, false)} ${A.ui.player(e.p)}</td><td>${A.ui.ally(e.p.aid)}</td>
           <td class="r">${A.fmt(e.pop)}${e.pop !== e.p.pop ? ` <span class="muted">/ ${A.compact(e.p.pop)}</span>` : ""}</td><td class="r">${e.n}${e.n !== e.p.villages ? ` <span class="muted">/ ${e.p.villages}</span>` : ""}</td>
           <td class="r">${A.ui.coord(e.near.x, e.near.y)} <span class="num">${A.fmt(e.dist, 1)}</span></td>
@@ -327,7 +327,7 @@
       const r = A.cultureEta({ have: st.have === "" ? NaN : +st.have, need: st.need === "" ? NaN : +st.need, perDay: +st.perDay, now: Date.now() });
       if (!r) { $("#cp-out").innerHTML = `<div class="muted">${t("cp.enter")}</div>`; return; }
       if (!r.missing) { $("#cp-out").innerHTML = `<div class="explain">${t("cp.ready")}</div>`; return; }
-      if (!r.at) { $("#cp-out").innerHTML = `<div class="explain">${t("cp.noProd", { n: A.fmt(r.missing) })}</div>`; return; }
+      if (!r.at) { $("#cp-out").innerHTML = st.perDay === "" ? `<div class="muted">${t("cp.enter")}</div>` : `<div class="explain">${t("cp.noProd", { n: A.fmt(r.missing) })}</div>`; return; }
       $("#cp-out").innerHTML = `<div class="explain"><b>${t("cp.days", { d: A.fmt(r.days, 1) })}</b><br>${t("cp.result", { n: A.fmt(r.missing), at: A.esc(r.at.toLocaleString(A.locale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) })}</div>`;
     };
     ["have", "need", "perDay"].forEach((k) => ($("#cp-" + k).oninput = (e) => { st[k] = e.target.value; A.store.set(key, st); render(); }));
@@ -341,7 +341,7 @@
   A.mountIncoming = (card) => {
     const w = A.state.world, h = A.state.home;
     const now = new Date();
-    const st = { tid: 1, ts: 0, art: 1, auto: true };
+    const st = { tid: A.worldTribes()[0], ts: 0, art: 1, auto: true };
     card.innerHTML = `<div class="card-h"><h2>${t("inc.title")}</h2><span class="sub">${t("inc.sub")}</span></div>
       <div class="card-b">
         <div class="fgrid">
@@ -354,9 +354,9 @@
           <div class="field full-sm"><label for="inc-seen">${t("inc.seen")}</label><div class="input-group"><input class="input mono" type="datetime-local" step="1" id="inc-seen" value="${localInput(now)}"><button class="btn" id="inc-now" type="button">${t("inc.now")}</button></div></div>
         </div>
         <div class="fgrid cols-3">
-          <div class="field full-sm"><label for="inc-tid">${t("inc.tribe")}</label><select class="input" id="inc-tid">${A.PLAYABLE.map((tid) => `<option value="${tid}">${A.esc(t("tribe." + A.TRIBES[tid].key))}</option>`).join("")}</select></div>
+          <div class="field full-sm"><label for="inc-tid">${t("inc.tribe")}</label><select class="input" id="inc-tid">${A.worldTribes().map((tid) => `<option value="${tid}">${A.esc(t("tribe." + A.TRIBES[tid].key))}</option>`).join("")}</select></div>
           <div class="field"><label for="inc-ts">${t("inc.ts")}</label><input class="input num" type="number" min="0" max="20" id="inc-ts" value="0"></div>
-          <div class="field"><label for="inc-art">${t("inact.art")}</label><select class="input" id="inc-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}">×${x}</option>`).join("")}</select></div>
+          <div class="field"><label for="inc-art">${t("inact.art")}</label><select class="input" id="inc-art">${[1, 1.5, 2, 3].map((x) => `<option value="${x}">×${A.fmt(x, x % 1 ? 1 : 0)}</option>`).join("")}</select></div>
         </div>
         <div id="inc-who"></div>
         <div id="inc-verdict"></div>
@@ -365,11 +365,7 @@
         <div class="row"><button class="btn" id="inc-add" type="button" disabled>${A.icon("plus")}${t("inc.add")}</button></div>
         <details class="paste-box" id="inc-rally"><summary>${A.icon("download")}<b>${t("inc.rally")}</b><span class="muted">${t("inc.rallySub")}</span></summary>
           <ol class="steps">${t("inc.rallyHow")}</ol>
-          <textarea class="input" id="inc-rally-ta" style="min-height:90px" aria-label="${A.esc(t("inc.rally"))}" placeholder="Roma	b0b ataca A-00
-(-12|45)
-Tropas	?	?	?…
-Llegada
-en 1:02:03 h."></textarea>
+          <textarea class="input" id="inc-rally-ta" style="min-height:90px" aria-label="${A.esc(t("inc.rally"))}" placeholder="${A.esc(t("inc.rallyPh"))}"></textarea>
           <div class="row"><button class="btn" id="inc-rally-go" type="button">${A.icon("plus")}${t("inc.rallyGo")}</button></div>
           <div class="muted" style="font-size:12.5px">${t("inc.rallyNote")}</div>
         </details>
@@ -422,7 +418,7 @@ en 1:02:03 h."></textarea>
       renderList();
     };
     const save = () => { A.store.set(key, list); renderFake(); renderList(); };
-    $("#inc-add").onclick = () => { if (cur) { list.push(cur); save(); } };
+    $("#inc-add").onclick = () => { if (cur && !list.some((x) => sameAttack(x, cur))) { list.push(cur); save(); } };
     /* Importa los movimientos pegados de la plaza de reuniones. Los que salen de la aldea de destino o de cualquier
        aldea tuya son tropas propias y se descartan; del resto se deduce la unidad igual que al escribirlos a mano. */
     const importRally = () => {

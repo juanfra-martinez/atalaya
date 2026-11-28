@@ -24,7 +24,7 @@
     const from = A.resolvePlace(w, r.from), to = A.resolvePlace(w, r.to);
     const v = from ? w.vAt.get(from.x + "," + from.y) || null : null, tv = to ? w.vAt.get(to.x + "," + to.y) || null : null;
     const tid = v && A.UNITS[v.tid] ? v.tid : A.UNITS[r.tid] ? r.tid : 1;
-    const unit = Math.max(0, Math.min(A.UNITS[tid].length - 1, r.unit | 0));
+    const unit = Math.max(0, Math.min(8, r.unit | 0));
     const base = { from, to, v, tv, tid, unit, p: v ? w.pById.get(v.uid) || null : null, tp: tv ? w.pById.get(tv.uid) || null : null };
     if (!from || !to || (from.x === to.x && from.y === to.y)) return { ok: false, ...base };
     const dist = A.dist(from.x, from.y, to.x, to.y, w.R);
