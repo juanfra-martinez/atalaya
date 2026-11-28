@@ -119,7 +119,7 @@
     /* No se puede esperar a otras llamadas de supabase dentro de este aviso: se atiende en la siguiente vuelta. */
     sb.auth.onAuthStateChange((_ev, session) => setTimeout(() => onSession(session), 0));
     return sb;
-  }).catch((err) => { loading = null; set({ phase: "error", error: err.message }); throw err; }));
+  }).catch((err) => { loading = null; set({ phase: "error", error: S.explain(err) }); throw err; }));
 
   const set = (patch) => { Object.assign(S.state, patch); S.paint(); A.emit("sync", S.state); };
 
@@ -198,7 +198,7 @@
       await pushDirty();
       set({ phase: "idle", last: Date.now(), error: null });
     } catch (err) {
-      set({ phase: navigator.onLine ? "error" : "offline", error: err?.message || String(err) });
+      set({ phase: navigator.onLine ? "error" : "offline", error: S.explain(err) });
     }
   };
 
@@ -240,6 +240,34 @@
     if (dirty) history.replaceState(history.state, "", u.pathname + u.search + u.hash);
   };
 
+  /* ---------- errores ---------- */
+  /* Los errores de Supabase llegan en inglés y sin contexto: los habituales se explican con qué hacer. Sirve para los
+     de supabase-js (code/status), los de la base (incluidos los del disparador de cuotas) y los que vuelven en la
+     dirección tras abrir el enlace del correo (error_code). Lo desconocido se muestra tal cual. */
+  const EXPLAIN = {
+    over_email_send_rate_limit: "rateEmail", over_request_rate_limit: "rateReq", over_sms_send_rate_limit: "rateReq",
+    otp_expired: "expired", flow_state_expired: "expired", flow_state_not_found: "expired",
+    email_address_invalid: "badEmail", validation_failed: "badEmail",
+    email_address_not_authorized: "notAuthorized",
+    signup_disabled: "disabled", otp_disabled: "disabled", email_provider_disabled: "disabled", provider_disabled: "disabled",
+    session_expired: "session", session_not_found: "session", refresh_token_not_found: "session", refresh_token_already_used: "session", bad_jwt: "session", no_authorization: "session",
+    "42501": "session", PGRST301: "session", PGRST303: "session",
+    "23514": "tooBig",
+  };
+  S.explain = (err) => {
+    const code = String(err?.code || err?.error_code || "");
+    const msg = String(err?.message || err?.error_description || (typeof err === "string" ? err : "") || "");
+    let k = EXPLAIN[code];
+    if (!k && /atalaya: demasiadas claves/.test(msg)) k = "quotaKeys";
+    if (!k && /atalaya: se ha superado el espacio/.test(msg)) k = "quotaSize";
+    if (!k && /email rate limit/i.test(msg)) k = "rateEmail";
+    if (!k && (err?.status === 429 || /rate limit/i.test(msg))) k = "rateReq";
+    if (!k && /expired|is invalid/i.test(msg) && /token|link|otp|code/i.test(msg)) k = "expired";
+    if (!k && (err?.name === "AuthRetryableFetchError" || /failed to fetch|networkerror|load failed|fetch failed/i.test(msg))) k = "network";
+    if (!k && (err?.status >= 500 || /^5\d\d$/.test(code))) k = "server";
+    return k ? t("acct.err." + k) : t("acct.error", { e: msg || "?" });
+  };
+
   /* ---------- acciones ---------- */
   const redirect = () => location.origin + location.pathname;
   S.sendLink = async (email) => {
@@ -268,7 +296,7 @@
   S.deleteAccount = async () => {
     if (!sb || !confirm(t("acct.deleteConfirm"))) return;
     const { error } = await sb.rpc("delete_my_account");
-    if (error) { A.toast(t("acct.error", { e: error.message })); return; }
+    if (error) { A.toast(S.explain(error)); return; }
     const m = M(); m.uid = null; m.cursor = null; saveM(m); // lo de este navegador se queda; con otra cuenta se volvería a subir
     await sb.auth.signOut({ scope: "local" }).catch(() => {});
     onSession(null);
@@ -319,7 +347,7 @@
     return s;
   };
 
-  S.open = () => {
+  S.open = (err) => {
     const u = S.state.user;
     const privacy = `<a href="#privacy" data-close-link>${A.esc(t("acct.privacyLink"))}</a>`;
     const exportBtn = `<button class="btn ghost sm" id="acct-export">${A.icon("download")}${t("acct.export")}</button>`;
@@ -332,26 +360,32 @@
           <span class="muted" style="font-size:12.5px" id="acct-sent"></span>
           <div class="row"><input class="input mono" id="acct-otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" style="flex:1"><button class="btn primary">${t("acct.enter")}</button></div></form>
         ${S.providers.includes("discord") ? `<div class="row" style="align-items:center;gap:10px"><span class="muted" style="font-size:12.5px">${t("acct.or")}</span><button class="btn" id="acct-discord">${t("acct.discord")}</button></div>` : ""}
+        <p class="acct-err" id="acct-err" role="alert" hidden></p>
         <p class="muted" style="margin:0;font-size:12.5px">${t("acct.what")} ${privacy}</p>`,
         exportBtn);
       const email = m.querySelector("#acct-email");
+      /* Los errores se quedan a la vista dentro de la ventana: un aviso de 2 s no da tiempo a leer qué hacer. */
+      const fail = (e) => { const box = m.querySelector("#acct-err"); box.textContent = S.explain(e); box.hidden = false; };
+      const clear = () => { m.querySelector("#acct-err").hidden = true; };
+      if (err) fail(err);
       m.querySelector("#acct-form").onsubmit = async (e) => {
         e.preventDefault();
-        const btn = m.querySelector("#acct-send"); btn.disabled = true;
+        const btn = m.querySelector("#acct-send"); btn.disabled = true; clear();
         try {
           await S.sendLink(email.value.trim());
           m.querySelector("#acct-code").hidden = false;
           m.querySelector("#acct-sent").textContent = t("acct.sent", { e: email.value.trim() });
           m.querySelector("#acct-otp").focus();
-        } catch (err) { A.toast(t("acct.error", { e: err.message })); }
+        } catch (e2) { fail(e2); }
         finally { btn.disabled = false; }
       };
       m.querySelector("#acct-code").onsubmit = async (e) => {
         e.preventDefault();
+        clear();
         try { await S.verifyCode(email.value.trim(), m.querySelector("#acct-otp").value.trim()); }
-        catch (err) { A.toast(t("acct.error", { e: err.message })); }
+        catch (e2) { fail(e2); }
       };
-      m.querySelector("#acct-discord")?.addEventListener("click", () => S.oauth("discord").catch((err) => A.toast(t("acct.error", { e: err.message }))));
+      m.querySelector("#acct-discord")?.addEventListener("click", () => S.oauth("discord").catch(fail));
       wire(m);
       return;
     }
@@ -388,9 +422,11 @@
        de la dirección y del historial antes de que el enrutador lo lea como una vista. */
     const h = new URLSearchParams(location.hash.slice(1)), q = new URLSearchParams(location.search);
     const tokens = h.has("access_token") && h.has("refresh_token") ? { access_token: h.get("access_token"), refresh_token: h.get("refresh_token") } : null;
-    const err = q.get("error_description") || h.get("error_description");
+    const desc = q.get("error_description") || h.get("error_description");
+    const err = desc ? { code: q.get("error_code") || h.get("error_code") || "", message: desc } : null;
     if (tokens || h.has("error_description")) history.replaceState(history.state, "", location.pathname + location.search);
-    if (err) { setTimeout(() => A.toast(t("acct.error", { e: err })), 600); cleanUrl(); }
+    /* Un enlace caducado o ya usado: se abre la ventana de la cuenta con la explicación, lista para pedir otro. */
+    if (err) { setTimeout(() => (CFG ? S.open(err) : A.toast(S.explain(err))), 600); cleanUrl(); }
     if (!CFG) return;
     let hasSession = false;
     try { hasSession = !!localStorage.getItem(AUTH_KEY); } catch { /* */ }
@@ -404,7 +440,7 @@
           onSession(data?.session);
         })
         .catch((e) => {
-          if (sb) { set({ phase: "out", user: null }); A.toast(t("acct.error", { e: e.message })); }
+          if (sb) { set({ phase: "out", user: null }); setTimeout(() => S.open(e), 600); }
         });
     }
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && uid && Date.now() - lastRun > 20e3) sync(); });
