@@ -16,7 +16,8 @@ A.coord = (x, y) => `(${x}|${y})`;
 A.debounce = (fn, ms = 150) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 A.store = {
   get(k, d) { try { const v = localStorage.getItem("atalaya:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("atalaya:" + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
+  set(k, v) { try { localStorage.setItem("atalaya:" + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ return; } A.store.onSet?.(k, v); },
+  onSet: null, // sync.js apunta aquí cada escritura para subirla a la nube si hay sesión
 };
 A.parseCoord = (s) => {
   const m = String(s || "").replace(/[‭‬‎‏]/g, "").replace(/[−–]/g, "-").match(/(-?\d{1,3})\s*[|,;/ ]\s*(-?\d{1,3})/);

@@ -6,7 +6,7 @@ name: Recolectar y publicar
 
 on:
   schedule:
-    - cron: "17 * * * *"   # cada hora; los mundos regeneran su map.sql una vez al día a horas distintas
+    - cron: "23 * * * *"   # cada hora; los mundos regeneran su map.sql una vez al día a horas distintas
   workflow_dispatch:
     inputs:
       fresh:
@@ -111,6 +111,13 @@ jobs:
 
       - name: Generar la web
         if: steps.changed.outputs.deploy == 'true'
+        env:
+          # Cuentas opcionales (README → "Cuentas y sincronización"). Son públicas por diseño: variables, no secretos.
+          ATALAYA_SUPABASE_URL: ${{ vars.ATALAYA_SUPABASE_URL }}
+          ATALAYA_SUPABASE_ANON_KEY: ${{ vars.ATALAYA_SUPABASE_ANON_KEY }}
+          ATALAYA_AUTH_PROVIDERS: ${{ vars.ATALAYA_AUTH_PROVIDERS }}
+          ATALAYA_SUPABASE_REGION: ${{ vars.ATALAYA_SUPABASE_REGION }}
+          ATALAYA_PRIVACY_CONTACT: ${{ vars.ATALAYA_PRIVACY_CONTACT }}
         run: |
           (cd backend && python -m atalaya.cli export-static ../_site/data)
           python web/build.py --static data --out _site/index.html
@@ -130,6 +137,19 @@ jobs:
             git commit --allow-empty -m "Mantenimiento: mantener activo el recolector programado"
             git push
           fi
+
+      - name: Mantener activo Supabase
+        # Los proyectos gratuitos se pausan tras una semana sin peticiones. Sin sesión la tabla no deja ver nada
+        # (responde 401/403): basta con que la petición llegue a la base.
+        if: vars.ATALAYA_SUPABASE_URL != '' && vars.ATALAYA_SUPABASE_ANON_KEY != ''
+        continue-on-error: true
+        env:
+          URL: ${{ vars.ATALAYA_SUPABASE_URL }}
+          KEY: ${{ vars.ATALAYA_SUPABASE_ANON_KEY }}
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "${URL%/}/rest/v1/user_data?select=key&limit=1" -H "apikey: $KEY" || echo 000)
+          echo "Supabase respondió $code"
+          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then echo "::warning::Supabase no responde ($code)"; fi
 
       - name: Resultado
         if: always()
